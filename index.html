@@ -4,14 +4,29 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <title>Medo Number Cleaner</title>
+  <title>Medo Filter</title>
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
   <style>
     * {
       box-sizing: border-box;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    :root {
+      --bg: #020617;
+      --card: rgba(15, 23, 42, 0.82);
+      --card2: rgba(2, 6, 23, 0.48);
+      --border: rgba(148, 163, 184, 0.16);
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --green: #22c55e;
+      --green2: #86efac;
+      --red: #ef4444;
+      --blue: #38bdf8;
+      --yellow: #facc15;
     }
 
     html {
@@ -21,12 +36,12 @@
     body {
       margin: 0;
       min-height: 100vh;
-      background:
-        radial-gradient(circle at top right, rgba(34, 197, 94, 0.16), transparent 30%),
-        radial-gradient(circle at bottom left, rgba(59, 130, 246, 0.14), transparent 35%),
-        linear-gradient(135deg, #020617, #0f172a);
-      color: #e5e7eb;
+      color: var(--text);
       padding: 18px;
+      background:
+        radial-gradient(circle at top right, rgba(34, 197, 94, 0.18), transparent 28%),
+        radial-gradient(circle at bottom left, rgba(56, 189, 248, 0.12), transparent 35%),
+        linear-gradient(135deg, #020617, #0f172a 55%, #020617);
     }
 
     .page {
@@ -39,13 +54,30 @@
 
     .container {
       width: 100%;
-      max-width: 1050px;
-      background: rgba(15, 23, 42, 0.88);
-      border: 1px solid rgba(148, 163, 184, 0.18);
-      border-radius: 28px;
-      box-shadow: 0 30px 90px rgba(0, 0, 0, 0.5);
+      max-width: 1120px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 32px;
+      box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55);
       backdrop-filter: blur(18px);
       padding: 30px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .container::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(120deg, rgba(34, 197, 94, 0.08), transparent 35%),
+        linear-gradient(300deg, rgba(56, 189, 248, 0.06), transparent 38%);
+      pointer-events: none;
+    }
+
+    .content {
+      position: relative;
+      z-index: 1;
     }
 
     .header {
@@ -57,53 +89,54 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      padding: 7px 14px;
+      gap: 8px;
+      padding: 8px 15px;
       border-radius: 999px;
       background: rgba(34, 197, 94, 0.12);
-      color: #86efac;
+      color: var(--green2);
       border: 1px solid rgba(34, 197, 94, 0.25);
       font-size: 13px;
-      margin-bottom: 12px;
+      margin-bottom: 14px;
+      direction: ltr;
     }
 
     h1 {
       margin: 0;
-      font-size: clamp(28px, 4vw, 48px);
-      letter-spacing: -1px;
-      line-height: 1.15;
+      font-size: clamp(31px, 5vw, 54px);
+      line-height: 1.12;
+      letter-spacing: -1.2px;
     }
 
     .subtitle {
-      color: #94a3b8;
-      margin: 12px auto 0;
-      line-height: 1.8;
+      color: var(--muted);
+      margin: 14px auto 0;
+      line-height: 1.85;
       font-size: 15px;
-      max-width: 680px;
+      max-width: 710px;
     }
 
     .layout {
       display: grid;
-      grid-template-columns: 0.9fr 1.1fr;
+      grid-template-columns: 0.92fr 1.08fr;
       gap: 20px;
       align-items: stretch;
     }
 
-    .left-panel,
-    .right-panel {
-      background: rgba(2, 6, 23, 0.35);
-      border: 1px solid rgba(148, 163, 184, 0.12);
-      border-radius: 22px;
+    .panel {
+      background: var(--card2);
+      border: 1px solid var(--border);
+      border-radius: 24px;
       padding: 18px;
     }
 
     .drop-zone {
-      min-height: 250px;
-      border: 2px dashed rgba(148, 163, 184, 0.35);
-      border-radius: 22px;
-      padding: 28px 18px;
+      min-height: 245px;
+      border: 2px dashed rgba(148, 163, 184, 0.32);
+      border-radius: 24px;
+      padding: 26px 18px;
       text-align: center;
-      background: rgba(2, 6, 23, 0.45);
-      transition: 0.2s;
+      background: rgba(2, 6, 23, 0.42);
+      transition: 0.2s ease;
       cursor: pointer;
       display: flex;
       flex-direction: column;
@@ -112,13 +145,13 @@
 
     .drop-zone:hover,
     .drop-zone.dragover {
-      border-color: #22c55e;
+      border-color: var(--green);
       background: rgba(34, 197, 94, 0.08);
       transform: translateY(-2px);
     }
 
     .upload-icon {
-      font-size: 46px;
+      font-size: 48px;
       margin-bottom: 12px;
     }
 
@@ -126,10 +159,14 @@
       margin: 6px 0;
     }
 
+    .drop-zone strong {
+      font-size: 18px;
+    }
+
     .small {
-      color: #94a3b8;
+      color: var(--muted);
       font-size: 13px;
-      line-height: 1.6;
+      line-height: 1.7;
     }
 
     input[type="file"] {
@@ -138,51 +175,120 @@
 
     .stats {
       display: grid;
-      grid-template-columns: 1fr;
+      grid-template-columns: repeat(2, 1fr);
       gap: 12px;
       margin-top: 16px;
     }
 
     .stat {
-      background: rgba(15, 23, 42, 0.8);
+      background: rgba(15, 23, 42, 0.82);
       border: 1px solid rgba(148, 163, 184, 0.14);
-      border-radius: 18px;
-      padding: 16px;
+      border-radius: 20px;
+      padding: 15px;
       text-align: center;
+      min-height: 92px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
     }
 
     .stat strong {
       display: block;
-      font-size: 25px;
-      color: #f8fafc;
+      font-size: 27px;
+      color: var(--text);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      direction: ltr;
     }
 
     .stat span {
-      color: #94a3b8;
+      color: var(--muted);
       font-size: 13px;
+      margin-top: 4px;
+    }
+
+    .file-stat {
+      grid-column: span 2;
+    }
+
+    .settings {
+      margin-top: 16px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .option {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 18px;
+      padding: 13px 14px;
+      color: #dbeafe;
+      font-size: 14px;
+    }
+
+    .switch {
+      position: relative;
+      width: 54px;
+      height: 30px;
+      flex: 0 0 auto;
+    }
+
+    .switch input {
+      display: none;
+    }
+
+    .slider {
+      position: absolute;
+      inset: 0;
+      background: #334155;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .slider::before {
+      content: "";
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      right: 3px;
+      top: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+
+    .switch input:checked + .slider {
+      background: var(--green);
+    }
+
+    .switch input:checked + .slider::before {
+      transform: translateX(-24px);
     }
 
     .actions {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(2, 1fr);
       gap: 12px;
       margin-bottom: 14px;
     }
 
     button {
       border: 0;
-      border-radius: 15px;
+      border-radius: 16px;
       padding: 14px 16px;
       cursor: pointer;
-      font-weight: 800;
+      font-weight: 850;
       font-size: 15px;
       color: #020617;
-      background: #22c55e;
-      transition: 0.18s;
-      min-height: 48px;
+      background: var(--green);
+      transition: 0.18s ease;
+      min-height: 50px;
     }
 
     button:hover {
@@ -190,8 +296,18 @@
       filter: brightness(1.08);
     }
 
+    button.secondary {
+      background: #334155;
+      color: #e5e7eb;
+    }
+
+    button.blue {
+      background: var(--blue);
+      color: #001018;
+    }
+
     button.danger {
-      background: #ef4444;
+      background: var(--red);
       color: white;
     }
 
@@ -199,19 +315,20 @@
       opacity: 0.45;
       cursor: not-allowed;
       transform: none;
+      filter: none;
     }
 
     textarea {
       width: 100%;
-      min-height: 390px;
+      min-height: 365px;
       resize: vertical;
-      background: #020617;
+      background: rgba(2, 6, 23, 0.92);
       color: #d1fae5;
       border: 1px solid rgba(148, 163, 184, 0.2);
-      border-radius: 18px;
+      border-radius: 20px;
       padding: 16px;
       outline: none;
-      line-height: 1.65;
+      line-height: 1.7;
       font-size: 15px;
       direction: ltr;
       text-align: left;
@@ -221,21 +338,70 @@
       border-color: rgba(34, 197, 94, 0.6);
     }
 
+    .range-box {
+      margin-top: 14px;
+      background: rgba(15, 23, 42, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 20px;
+      padding: 14px;
+    }
+
+    .range-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+      color: #e2e8f0;
+      font-weight: 800;
+      font-size: 14px;
+    }
+
+    .range-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      max-height: 120px;
+      overflow: auto;
+      padding-left: 4px;
+    }
+
+    .chip {
+      direction: ltr;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(2, 6, 23, 0.75);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      color: #cbd5e1;
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .chip b {
+      color: var(--green2);
+      font-weight: 850;
+    }
+
     .status {
       margin-top: 12px;
-      color: #94a3b8;
+      color: var(--muted);
       font-size: 14px;
       text-align: center;
       min-height: 24px;
+      line-height: 1.7;
     }
 
     .footer {
       text-align: center;
-      color: #86efac;
+      color: var(--green2);
       font-size: 13px;
-      margin-top: 18px;
+      margin-top: 20px;
       letter-spacing: 1px;
-      font-weight: 700;
+      font-weight: 800;
+      direction: ltr;
     }
 
     @media (max-width: 900px) {
@@ -245,20 +411,16 @@
 
       .page {
         align-items: flex-start;
-        padding-top: 10px;
+        padding-top: 8px;
       }
 
       .container {
         padding: 20px;
-        border-radius: 24px;
+        border-radius: 26px;
       }
 
       .layout {
         grid-template-columns: 1fr;
-      }
-
-      .drop-zone {
-        min-height: 210px;
       }
 
       textarea {
@@ -273,7 +435,7 @@
 
       .container {
         padding: 15px;
-        border-radius: 20px;
+        border-radius: 22px;
       }
 
       .header {
@@ -281,28 +443,34 @@
       }
 
       h1 {
-        font-size: 28px;
+        font-size: 30px;
       }
 
       .subtitle {
         font-size: 14px;
-        line-height: 1.7;
       }
 
-      .left-panel,
-      .right-panel {
+      .panel {
         padding: 13px;
-        border-radius: 18px;
+        border-radius: 19px;
       }
 
       .drop-zone {
-        min-height: 185px;
+        min-height: 190px;
         padding: 22px 12px;
-        border-radius: 18px;
+        border-radius: 19px;
       }
 
       .upload-icon {
-        font-size: 38px;
+        font-size: 40px;
+      }
+
+      .stats {
+        grid-template-columns: 1fr;
+      }
+
+      .file-stat {
+        grid-column: span 1;
       }
 
       .actions {
@@ -311,26 +479,12 @@
 
       button {
         width: 100%;
-        min-height: 50px;
-        font-size: 15px;
+        min-height: 51px;
       }
 
       textarea {
-        min-height: 280px;
+        min-height: 285px;
         font-size: 14px;
-        border-radius: 16px;
-      }
-
-      .stats {
-        gap: 10px;
-      }
-
-      .stat {
-        padding: 13px;
-      }
-
-      .stat strong {
-        font-size: 22px;
       }
     }
   </style>
@@ -339,57 +493,87 @@
 <body>
   <div class="page">
     <main class="container">
-      <section class="header">
-        <div class="badge">Number Cleaner Tool</div>
-        <h1>فلترة الأرقام من أي ملف</h1>
-        <p class="subtitle">
-          ارفع ملف Excel أو CSV أو TXT، والموقع هيستخرج الأرقام وينضفها ويخلي كل رقم في سطر بدون علامة +.
-        </p>
-      </section>
+      <div class="content">
+        <section class="header">
+          <div class="badge">MEDO FILTER</div>
+          <h1>ارفع ملفك وسيب الباقي علينا</h1>
+          <p class="subtitle">
+            هنسحب الأرقام من الملف، ننضفها، نحذف التكرار، ونرتبها كل رقم في سطر.
+            تقدر تنزلهم كلهم في ملف واحد أو تفصل كل Range في ملف لوحده.
+          </p>
+        </section>
 
-      <section class="layout">
-        <div class="left-panel">
-          <label class="drop-zone" id="dropZone">
-            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.txt,.log,.json,.html,.xml" />
-            <div class="upload-icon">📁</div>
-            <p><strong>اضغط هنا لاختيار ملف</strong></p>
-            <p class="small">أو اسحب الملف وحطه هنا</p>
-            <p class="small">يدعم Excel / CSV / TXT وأنواع نصية أخرى</p>
-          </label>
+        <section class="layout">
+          <div class="panel">
+            <label class="drop-zone" id="dropZone">
+              <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.txt,.log,.json,.html,.xml" />
+              <div class="upload-icon">📂</div>
+              <p><strong>اختار الملف من هنا</strong></p>
+              <p class="small">أو اسحبه وحطه هنا</p>
+              <p class="small">Excel / CSV / TXT وأي ملف نصي عادي</p>
+            </label>
 
-          <section class="stats">
-            <div class="stat">
-              <strong id="totalFound">0</strong>
-              <span>أرقام تم العثور عليها</span>
+            <section class="stats">
+              <div class="stat">
+                <strong id="totalFound">0</strong>
+                <span>رقم اتلقى</span>
+              </div>
+
+              <div class="stat">
+                <strong id="uniqueFound">0</strong>
+                <span>بعد التنضيف</span>
+              </div>
+
+              <div class="stat">
+                <strong id="rangeCount">0</strong>
+                <span>Range</span>
+              </div>
+
+              <div class="stat">
+                <strong id="countryCount">0</strong>
+                <span>دولة</span>
+              </div>
+
+              <div class="stat file-stat">
+                <strong id="fileName">---</strong>
+                <span>اسم الملف</span>
+              </div>
+            </section>
+
+            <div class="settings">
+              <div class="option">
+                <span>حط علامة + قبل كل رقم</span>
+                <label class="switch">
+                  <input type="checkbox" id="plusToggle" />
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <section class="actions">
+              <button id="copyBtn" disabled>نسخ الأرقام</button>
+              <button id="downloadAllBtn" disabled>تحميل ملف واحد</button>
+              <button id="downloadRangesBtn" class="blue" disabled>تحميل حسب الـ Range</button>
+              <button id="clearBtn" class="danger" disabled>مسح الكل</button>
+            </section>
+
+            <textarea id="output" placeholder="الأرقام هتظهر هنا..." readonly></textarea>
+
+            <div class="range-box">
+              <div class="range-title">
+                <span>ملخص الـ Ranges</span>
+                <span id="rangeHint" class="small">لسه مفيش بيانات</span>
+              </div>
+              <div class="range-list" id="rangeList"></div>
             </div>
 
-            <div class="stat">
-              <strong id="uniqueFound">0</strong>
-              <span>بعد حذف التكرار</span>
-            </div>
+            <div class="status" id="status"></div>
+          </div>
+        </section>
 
-            <div class="stat">
-              <strong id="fileName">---</strong>
-              <span>اسم الملف</span>
-            </div>
-          </section>
-        </div>
-
-        <div class="right-panel">
-          <section class="actions">
-            <button id="copyBtn" disabled>نسخ</button>
-            <button id="downloadBtn" disabled>تحميل TXT</button>
-            <button id="clearBtn" class="danger" disabled>مسح</button>
-          </section>
-
-          <textarea id="output" placeholder="الأرقام هتظهر هنا..." readonly></textarea>
-
-          <div class="status" id="status"></div>
-        </div>
-      </section>
-
-      <div class="footer">
-        ᴄʀᴇᴀᴛᴇᴅ ʙʏ ᴍᴇᴅᴏ
+        <div class="footer">ᴄʀᴇᴀᴛᴇᴅ ʙʏ ᴍᴇᴅᴏ</div>
       </div>
     </main>
   </div>
@@ -399,119 +583,340 @@
     const dropZone = document.getElementById("dropZone");
     const output = document.getElementById("output");
     const copyBtn = document.getElementById("copyBtn");
-    const downloadBtn = document.getElementById("downloadBtn");
+    const downloadAllBtn = document.getElementById("downloadAllBtn");
+    const downloadRangesBtn = document.getElementById("downloadRangesBtn");
     const clearBtn = document.getElementById("clearBtn");
+    const plusToggle = document.getElementById("plusToggle");
+
     const statusBox = document.getElementById("status");
     const totalFoundBox = document.getElementById("totalFound");
     const uniqueFoundBox = document.getElementById("uniqueFound");
+    const rangeCountBox = document.getElementById("rangeCount");
+    const countryCountBox = document.getElementById("countryCount");
     const fileNameBox = document.getElementById("fileName");
+    const rangeList = document.getElementById("rangeList");
+    const rangeHint = document.getElementById("rangeHint");
 
-    let cleanedNumbers = [];
+    let cleanRows = [];
+    let cleanNumbers = [];
+    let groupedByRange = {};
 
     function setStatus(text) {
       statusBox.textContent = text;
     }
 
-    function normalizeNumber(raw) {
-      let number = String(raw);
+    function shortFileName(name) {
+      return name.length > 16 ? name.slice(0, 16) + "..." : name;
+    }
+
+    function cleanFilePart(value) {
+      return String(value || "Unknown")
+        .trim()
+        .replace(/[\\/:*?"<>|]/g, "-")
+        .replace(/\s+/g, "_")
+        .slice(0, 60) || "Unknown";
+    }
+
+    function normalizeArabicDigits(text) {
+      return String(text || "")
+        .replace(/[٠-٩]/g, d => "٠١٢٣٤٥٦٧٨٩".indexOf(d))
+        .replace(/[۰-۹]/g, d => "۰۱۲۳۴۵۶۷۸۹".indexOf(d));
+    }
+
+    function normalizeNumber(value) {
+      let number = normalizeArabicDigits(value).trim();
 
       number = number.replace(/\+/g, "");
       number = number.replace(/[^\d]/g, "");
 
+      if (number.startsWith("00") && number.length > 11) {
+        number = number.slice(2);
+      }
+
       return number;
     }
 
-    function extractNumbers(text) {
-      const matches = String(text).match(/\+?\d[\d\s().\-_/]{7,}\d/g) || [];
-
-      const all = matches
-        .map(normalizeNumber)
-        .filter(num => num.length >= 10 && num.length <= 15);
-
-      const unique = [...new Set(all)];
-
-      return { all, unique };
+    function isValidPhoneNumber(number) {
+      return /^\d{10,15}$/.test(number);
     }
 
-    function shortFileName(name) {
-      return name.length > 14 ? name.slice(0, 14) + "..." : name;
+    function formatNumber(number) {
+      const clean = normalizeNumber(number);
+      return plusToggle.checked ? `+${clean}` : clean;
     }
 
-    function updateUI(all, unique, name) {
-      cleanedNumbers = unique;
+    function findHeaderIndex(row, names) {
+      const lowerNames = names.map(n => String(n).toLowerCase());
 
-      output.value = unique.join("\n");
+      for (let i = 0; i < row.length; i++) {
+        const cell = String(row[i] || "").trim().toLowerCase();
 
-      totalFoundBox.textContent = all.length;
-      uniqueFoundBox.textContent = unique.length;
+        if (lowerNames.includes(cell)) {
+          return i;
+        }
+      }
+
+      return -1;
+    }
+
+    function getRangeValue(value) {
+      const text = String(value || "").trim();
+      return text || "Unknown Range";
+    }
+
+    function getCountryValue(value) {
+      const text = String(value || "").trim();
+      return text || "Unknown Country";
+    }
+
+    function addNumberRow(numberValue, rangeValue, countryValue, rows) {
+      const number = normalizeNumber(numberValue);
+
+      if (!isValidPhoneNumber(number)) return;
+
+      rows.push({
+        number,
+        range: getRangeValue(rangeValue),
+        country: getCountryValue(countryValue)
+      });
+    }
+
+    function extractNumbersFromFreeText(text) {
+      const rows = [];
+      const matches = normalizeArabicDigits(text).match(/\+?\d[\d\s().\-_/]{8,}\d/g) || [];
+
+      matches.forEach(match => {
+        const number = normalizeNumber(match);
+        if (isValidPhoneNumber(number)) {
+          rows.push({
+            number,
+            range: "Unknown Range",
+            country: "Unknown Country"
+          });
+        }
+      });
+
+      return rows;
+    }
+
+    function uniqueRows(rows) {
+      const seen = new Set();
+      const result = [];
+
+      rows.forEach(row => {
+        if (!seen.has(row.number)) {
+          seen.add(row.number);
+          result.push(row);
+        }
+      });
+
+      return result;
+    }
+
+    function buildGroups(rows) {
+      const groups = {};
+
+      rows.forEach(row => {
+        const key = row.range || "Unknown Range";
+
+        if (!groups[key]) {
+          groups[key] = [];
+        }
+
+        groups[key].push(row.number);
+      });
+
+      return groups;
+    }
+
+    function updateOutput() {
+      cleanNumbers = cleanRows.map(row => row.number);
+      output.value = cleanNumbers.map(formatNumber).join("\n");
+
+      renderRanges();
+    }
+
+    function renderRanges() {
+      rangeList.innerHTML = "";
+
+      const rangeNames = Object.keys(groupedByRange);
+      rangeHint.textContent = rangeNames.length ? `${rangeNames.length} Range` : "لسه مفيش بيانات";
+
+      rangeNames.slice(0, 40).forEach(range => {
+        const chip = document.createElement("div");
+        chip.className = "chip";
+        chip.innerHTML = `<b>${groupedByRange[range].length}</b> ${range}`;
+        rangeList.appendChild(chip);
+      });
+
+      if (rangeNames.length > 40) {
+        const chip = document.createElement("div");
+        chip.className = "chip";
+        chip.innerHTML = `+${rangeNames.length - 40} more`;
+        rangeList.appendChild(chip);
+      }
+    }
+
+    function updateUI(allRows, uniqueCleanRows, name) {
+      cleanRows = uniqueCleanRows;
+      groupedByRange = buildGroups(cleanRows);
+
+      const countries = new Set(
+        cleanRows
+          .map(row => row.country)
+          .filter(country => country && country !== "Unknown Country")
+      );
+
+      totalFoundBox.textContent = allRows.length;
+      uniqueFoundBox.textContent = cleanRows.length;
+      rangeCountBox.textContent = Object.keys(groupedByRange).length;
+      countryCountBox.textContent = countries.size;
       fileNameBox.textContent = shortFileName(name);
 
-      const hasNumbers = unique.length > 0;
+      const hasNumbers = cleanRows.length > 0;
 
       copyBtn.disabled = !hasNumbers;
-      downloadBtn.disabled = !hasNumbers;
+      downloadAllBtn.disabled = !hasNumbers;
+      downloadRangesBtn.disabled = !hasNumbers;
       clearBtn.disabled = false;
 
-      setStatus(hasNumbers ? "تمت الفلترة بنجاح ✅" : "لم يتم العثور على أرقام مناسبة.");
+      updateOutput();
+
+      setStatus(
+        hasNumbers
+          ? `تمام، طلعنا ${allRows.length} رقم، وبعد التنضيف بقوا ${cleanRows.length}.`
+          : "ملقيناش أرقام مناسبة في الملف ده."
+      );
     }
 
-    async function readExcel(file) {
+    async function extractFromExcel(file) {
       const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data, { type: "array" });
+      const workbook = XLSX.read(data, {
+        type: "array",
+        cellText: true,
+        cellDates: false
+      });
 
-      let text = "";
+      const rowsOutput = [];
 
       workbook.SheetNames.forEach(sheetName => {
         const sheet = workbook.Sheets[sheetName];
+
         const rows = XLSX.utils.sheet_to_json(sheet, {
           header: 1,
-          raw: false
+          raw: false,
+          defval: ""
         });
 
+        if (!rows.length) return;
+
+        let headerRowIndex = -1;
+        let numberCol = -1;
+        let rangeCol = -1;
+        let countryCol = -1;
+
+        for (let r = 0; r < Math.min(rows.length, 25); r++) {
+          const row = rows[r];
+
+          const nCol = findHeaderIndex(row, [
+            "number", "numbers", "phone", "phones", "mobile", "msisdn",
+            "رقم", "الرقم", "ارقام", "الأرقام", "رقم الهاتف"
+          ]);
+
+          if (nCol !== -1) {
+            headerRowIndex = r;
+            numberCol = nCol;
+
+            rangeCol = findHeaderIndex(row, [
+              "range", "ranges", "prefix", "code", "رينج", "الرنج", "كود"
+            ]);
+
+            countryCol = findHeaderIndex(row, [
+              "country", "countries", "nation", "الدولة", "دولة", "بلد", "country name"
+            ]);
+
+            break;
+          }
+        }
+
+        if (numberCol !== -1) {
+          for (let i = headerRowIndex + 1; i < rows.length; i++) {
+            const row = rows[i];
+
+            addNumberRow(
+              row[numberCol],
+              rangeCol !== -1 ? row[rangeCol] : "Unknown Range",
+              countryCol !== -1 ? row[countryCol] : "Unknown Country",
+              rowsOutput
+            );
+          }
+
+          return;
+        }
+
         rows.forEach(row => {
-          text += row.join(" ") + "\n";
+          row.forEach(cell => {
+            const extracted = extractNumbersFromFreeText(cell);
+            extracted.forEach(item => rowsOutput.push(item));
+          });
         });
       });
 
-      return text;
+      return rowsOutput;
     }
 
-    async function readText(file) {
-      return await file.text();
+    async function extractFromText(file) {
+      const text = await file.text();
+      return extractNumbersFromFreeText(text);
     }
 
     async function handleFile(file) {
       if (!file) return;
 
-      setStatus("جاري قراءة الملف...");
+      setStatus("بنقرأ الملف...");
       fileNameBox.textContent = shortFileName(file.name);
 
       try {
         const extension = file.name.split(".").pop().toLowerCase();
-        let text = "";
+
+        let allRows = [];
 
         if (["xlsx", "xls", "csv"].includes(extension)) {
-          text = await readExcel(file);
+          allRows = await extractFromExcel(file);
         } else {
-          text = await readText(file);
+          allRows = await extractFromText(file);
         }
 
-        const { all, unique } = extractNumbers(text);
-        updateUI(all, unique, file.name);
+        const uniqueCleanRows = uniqueRows(allRows);
+        updateUI(allRows, uniqueCleanRows, file.name);
 
       } catch (error) {
-        setStatus("حصل خطأ أثناء قراءة الملف. جرّب ملف CSV أو XLSX أو TXT.");
         console.error(error);
+        setStatus("حصلت مشكلة في قراءة الملف. جرّب ترفعه بصيغة Excel أو CSV أو TXT.");
       }
     }
 
-    function getNextDownloadName() {
+    function getNextNumber() {
       const currentCount = Number(localStorage.getItem("medoDownloadCount") || "0");
       const nextCount = currentCount + 1;
 
       localStorage.setItem("medoDownloadCount", String(nextCount));
 
-      return `Medo-${nextCount}.txt`;
+      return nextCount;
+    }
+
+    function downloadBlob(blob, fileName) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+
+      a.href = url;
+      a.download = fileName;
+
+      document.body.appendChild(a);
+      a.click();
+
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     }
 
     fileInput.addEventListener("change", () => {
@@ -535,54 +940,87 @@
       handleFile(file);
     });
 
+    plusToggle.addEventListener("change", () => {
+      updateOutput();
+      setStatus(plusToggle.checked ? "تم تفعيل علامة + قبل الأرقام." : "تم إزالة علامة + من الأرقام.");
+    });
+
     copyBtn.addEventListener("click", async () => {
-      if (!cleanedNumbers.length) return;
+      if (!cleanRows.length) return;
+
+      const text = cleanRows.map(row => formatNumber(row.number)).join("\n");
 
       try {
-        await navigator.clipboard.writeText(cleanedNumbers.join("\n"));
-        setStatus("تم نسخ الأرقام ✅");
+        await navigator.clipboard.writeText(text);
+        setStatus("اتنسخوا خلاص ✅");
       } catch (error) {
         output.select();
         document.execCommand("copy");
-        setStatus("تم نسخ الأرقام ✅");
+        setStatus("اتنسخوا خلاص ✅");
       }
     });
 
-    downloadBtn.addEventListener("click", () => {
-      if (!cleanedNumbers.length) return;
+    downloadAllBtn.addEventListener("click", () => {
+      if (!cleanRows.length) return;
 
-      const fileName = getNextDownloadName();
+      const count = getNextNumber();
+      const fileName = `Medo-${count}.txt`;
 
-      const blob = new Blob([cleanedNumbers.join("\n")], {
+      const text = cleanRows.map(row => formatNumber(row.number)).join("\n");
+
+      const blob = new Blob([text], {
         type: "text/plain;charset=utf-8"
       });
 
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
+      downloadBlob(blob, fileName);
+      setStatus(`تم تحميل كل الأرقام في ${fileName} ✅`);
+    });
 
-      a.href = url;
-      a.download = fileName;
+    downloadRangesBtn.addEventListener("click", async () => {
+      if (!cleanRows.length) return;
 
-      document.body.appendChild(a);
-      a.click();
+      const zip = new JSZip();
+      const count = getNextNumber();
 
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      Object.keys(groupedByRange).forEach(range => {
+        const numbers = groupedByRange[range]
+          .map(formatNumber)
+          .join("\n");
 
-      setStatus(`تم تحميل الملف باسم ${fileName} ✅`);
+        const safeRange = cleanFilePart(range);
+        zip.file(`Medo-${safeRange}.txt`, numbers);
+      });
+
+      const blob = await zip.generateAsync({
+        type: "blob"
+      });
+
+      const zipName = `Medo-Ranges-${count}.zip`;
+
+      downloadBlob(blob, zipName);
+      setStatus(`تم تحميل كل Range في ملف لوحده داخل ${zipName} ✅`);
     });
 
     clearBtn.addEventListener("click", () => {
-      cleanedNumbers = [];
+      cleanRows = [];
+      cleanNumbers = [];
+      groupedByRange = {};
+
       output.value = "";
       fileInput.value = "";
 
       totalFoundBox.textContent = "0";
       uniqueFoundBox.textContent = "0";
+      rangeCountBox.textContent = "0";
+      countryCountBox.textContent = "0";
       fileNameBox.textContent = "---";
 
+      rangeList.innerHTML = "";
+      rangeHint.textContent = "لسه مفيش بيانات";
+
       copyBtn.disabled = true;
-      downloadBtn.disabled = true;
+      downloadAllBtn.disabled = true;
+      downloadRangesBtn.disabled = true;
       clearBtn.disabled = true;
 
       setStatus("");
