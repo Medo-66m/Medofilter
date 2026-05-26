@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Number Cleaner</title>
+
+  <title>Medo Number Cleaner</title>
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
@@ -13,28 +14,38 @@
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
+    html {
+      scroll-behavior: smooth;
+    }
+
     body {
       margin: 0;
       min-height: 100vh;
       background:
-        radial-gradient(circle at top, #1f2937 0, transparent 35%),
+        radial-gradient(circle at top right, rgba(34, 197, 94, 0.16), transparent 30%),
+        radial-gradient(circle at bottom left, rgba(59, 130, 246, 0.14), transparent 35%),
         linear-gradient(135deg, #020617, #0f172a);
       color: #e5e7eb;
+      padding: 18px;
+    }
+
+    .page {
+      width: 100%;
+      min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 24px;
     }
 
     .container {
       width: 100%;
-      max-width: 950px;
-      background: rgba(15, 23, 42, 0.86);
+      max-width: 1050px;
+      background: rgba(15, 23, 42, 0.88);
       border: 1px solid rgba(148, 163, 184, 0.18);
-      border-radius: 26px;
-      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
-      backdrop-filter: blur(16px);
-      padding: 28px;
+      border-radius: 28px;
+      box-shadow: 0 30px 90px rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(18px);
+      padding: 30px;
     }
 
     .header {
@@ -43,7 +54,9 @@
     }
 
     .badge {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       padding: 7px 14px;
       border-radius: 999px;
       background: rgba(34, 197, 94, 0.12);
@@ -55,26 +68,46 @@
 
     h1 {
       margin: 0;
-      font-size: clamp(28px, 5vw, 44px);
+      font-size: clamp(28px, 4vw, 48px);
       letter-spacing: -1px;
+      line-height: 1.15;
     }
 
     .subtitle {
       color: #94a3b8;
-      margin-top: 10px;
-      line-height: 1.7;
+      margin: 12px auto 0;
+      line-height: 1.8;
       font-size: 15px;
+      max-width: 680px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    .left-panel,
+    .right-panel {
+      background: rgba(2, 6, 23, 0.35);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      border-radius: 22px;
+      padding: 18px;
     }
 
     .drop-zone {
+      min-height: 250px;
       border: 2px dashed rgba(148, 163, 184, 0.35);
       border-radius: 22px;
-      padding: 34px 18px;
+      padding: 28px 18px;
       text-align: center;
       background: rgba(2, 6, 23, 0.45);
       transition: 0.2s;
       cursor: pointer;
-      margin-bottom: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
     }
 
     .drop-zone:hover,
@@ -85,7 +118,7 @@
     }
 
     .upload-icon {
-      font-size: 42px;
+      font-size: 46px;
       margin-bottom: 12px;
     }
 
@@ -96,6 +129,7 @@
     .small {
       color: #94a3b8;
       font-size: 13px;
+      line-height: 1.6;
     }
 
     input[type="file"] {
@@ -104,13 +138,13 @@
 
     .stats {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: 1fr;
       gap: 12px;
-      margin: 18px 0;
+      margin-top: 16px;
     }
 
     .stat {
-      background: rgba(2, 6, 23, 0.55);
+      background: rgba(15, 23, 42, 0.8);
       border: 1px solid rgba(148, 163, 184, 0.14);
       border-radius: 18px;
       padding: 16px;
@@ -119,8 +153,11 @@
 
     .stat strong {
       display: block;
-      font-size: 24px;
+      font-size: 25px;
       color: #f8fafc;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .stat span {
@@ -129,33 +166,28 @@
     }
 
     .actions {
-      display: flex;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
       gap: 12px;
-      flex-wrap: wrap;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
 
     button {
       border: 0;
-      border-radius: 14px;
-      padding: 13px 18px;
+      border-radius: 15px;
+      padding: 14px 16px;
       cursor: pointer;
-      font-weight: 700;
+      font-weight: 800;
+      font-size: 15px;
       color: #020617;
       background: #22c55e;
       transition: 0.18s;
-      flex: 1;
-      min-width: 150px;
+      min-height: 48px;
     }
 
     button:hover {
       transform: translateY(-1px);
       filter: brightness(1.08);
-    }
-
-    button.secondary {
-      background: #334155;
-      color: #e5e7eb;
     }
 
     button.danger {
@@ -171,7 +203,7 @@
 
     textarea {
       width: 100%;
-      min-height: 300px;
+      min-height: 390px;
       resize: vertical;
       background: #020617;
       color: #d1fae5;
@@ -179,10 +211,14 @@
       border-radius: 18px;
       padding: 16px;
       outline: none;
-      line-height: 1.6;
+      line-height: 1.65;
       font-size: 15px;
       direction: ltr;
       text-align: left;
+    }
+
+    textarea:focus {
+      border-color: rgba(34, 197, 94, 0.6);
     }
 
     .status {
@@ -195,78 +231,168 @@
 
     .footer {
       text-align: center;
-      color: #64748b;
-      font-size: 12px;
+      color: #86efac;
+      font-size: 13px;
       margin-top: 18px;
+      letter-spacing: 1px;
+      font-weight: 700;
     }
 
-    @media (max-width: 700px) {
+    @media (max-width: 900px) {
+      body {
+        padding: 14px;
+      }
+
+      .page {
+        align-items: flex-start;
+        padding-top: 10px;
+      }
+
       .container {
-        padding: 18px;
+        padding: 20px;
+        border-radius: 24px;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .drop-zone {
+        min-height: 210px;
+      }
+
+      textarea {
+        min-height: 320px;
+      }
+    }
+
+    @media (max-width: 600px) {
+      body {
+        padding: 10px;
+      }
+
+      .container {
+        padding: 15px;
         border-radius: 20px;
       }
 
-      .stats {
+      .header {
+        margin-bottom: 18px;
+      }
+
+      h1 {
+        font-size: 28px;
+      }
+
+      .subtitle {
+        font-size: 14px;
+        line-height: 1.7;
+      }
+
+      .left-panel,
+      .right-panel {
+        padding: 13px;
+        border-radius: 18px;
+      }
+
+      .drop-zone {
+        min-height: 185px;
+        padding: 22px 12px;
+        border-radius: 18px;
+      }
+
+      .upload-icon {
+        font-size: 38px;
+      }
+
+      .actions {
         grid-template-columns: 1fr;
       }
 
       button {
         width: 100%;
+        min-height: 50px;
+        font-size: 15px;
       }
 
       textarea {
-        min-height: 240px;
+        min-height: 280px;
+        font-size: 14px;
+        border-radius: 16px;
+      }
+
+      .stats {
+        gap: 10px;
+      }
+
+      .stat {
+        padding: 13px;
+      }
+
+      .stat strong {
+        font-size: 22px;
       }
     }
   </style>
 </head>
 
 <body>
-  <main class="container">
-    <section class="header">
-      <div class="badge">Number Cleaner Tool</div>
-      <h1>فلترة الأرقام من أي ملف</h1>
-      <p class="subtitle">
-        ارفع ملف Excel أو CSV أو TXT، والموقع هيستخرج الأرقام وينضفها ويخلي كل رقم في سطر بدون علامة +.
-      </p>
-    </section>
+  <div class="page">
+    <main class="container">
+      <section class="header">
+        <div class="badge">Number Cleaner Tool</div>
+        <h1>فلترة الأرقام من أي ملف</h1>
+        <p class="subtitle">
+          ارفع ملف Excel أو CSV أو TXT، والموقع هيستخرج الأرقام وينضفها ويخلي كل رقم في سطر بدون علامة +.
+        </p>
+      </section>
 
-    <label class="drop-zone" id="dropZone">
-      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.txt,.log,.json,.html,.xml" />
-      <div class="upload-icon">📁</div>
-      <p><strong>اضغط هنا لاختيار ملف</strong></p>
-      <p class="small">أو اسحب الملف وحطه هنا</p>
-    </label>
+      <section class="layout">
+        <div class="left-panel">
+          <label class="drop-zone" id="dropZone">
+            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.txt,.log,.json,.html,.xml" />
+            <div class="upload-icon">📁</div>
+            <p><strong>اضغط هنا لاختيار ملف</strong></p>
+            <p class="small">أو اسحب الملف وحطه هنا</p>
+            <p class="small">يدعم Excel / CSV / TXT وأنواع نصية أخرى</p>
+          </label>
 
-    <section class="stats">
-      <div class="stat">
-        <strong id="totalFound">0</strong>
-        <span>أرقام تم العثور عليها</span>
+          <section class="stats">
+            <div class="stat">
+              <strong id="totalFound">0</strong>
+              <span>أرقام تم العثور عليها</span>
+            </div>
+
+            <div class="stat">
+              <strong id="uniqueFound">0</strong>
+              <span>بعد حذف التكرار</span>
+            </div>
+
+            <div class="stat">
+              <strong id="fileName">---</strong>
+              <span>اسم الملف</span>
+            </div>
+          </section>
+        </div>
+
+        <div class="right-panel">
+          <section class="actions">
+            <button id="copyBtn" disabled>نسخ</button>
+            <button id="downloadBtn" disabled>تحميل TXT</button>
+            <button id="clearBtn" class="danger" disabled>مسح</button>
+          </section>
+
+          <textarea id="output" placeholder="الأرقام هتظهر هنا..." readonly></textarea>
+
+          <div class="status" id="status"></div>
+        </div>
+      </section>
+
+      <div class="footer">
+        ᴄʀᴇᴀᴛᴇᴅ ʙʏ ᴍᴇᴅᴏ
       </div>
-      <div class="stat">
-        <strong id="uniqueFound">0</strong>
-        <span>بعد حذف التكرار</span>
-      </div>
-      <div class="stat">
-        <strong id="fileName">---</strong>
-        <span>اسم الملف</span>
-      </div>
-    </section>
-
-    <section class="actions">
-      <button id="copyBtn" disabled>نسخ الأرقام</button>
-      <button id="downloadBtn" disabled>تحميل TXT</button>
-      <button id="clearBtn" class="danger" disabled>مسح</button>
-    </section>
-
-    <textarea id="output" placeholder="الأرقام هتظهر هنا..." readonly></textarea>
-
-    <div class="status" id="status"></div>
-
-    <div class="footer">
-      المعالجة تتم داخل المتصفح فقط، بدون رفع الملف لأي سيرفر.
-    </div>
-  </main>
+    </main>
+  </div>
 
   <script>
     const fileInput = document.getElementById("fileInput");
@@ -307,6 +433,10 @@
       return { all, unique };
     }
 
+    function shortFileName(name) {
+      return name.length > 14 ? name.slice(0, 14) + "..." : name;
+    }
+
     function updateUI(all, unique, name) {
       cleanedNumbers = unique;
 
@@ -314,7 +444,7 @@
 
       totalFoundBox.textContent = all.length;
       uniqueFoundBox.textContent = unique.length;
-      fileNameBox.textContent = name.length > 10 ? name.slice(0, 10) + "..." : name;
+      fileNameBox.textContent = shortFileName(name);
 
       const hasNumbers = unique.length > 0;
 
@@ -333,7 +463,10 @@
 
       workbook.SheetNames.forEach(sheetName => {
         const sheet = workbook.Sheets[sheetName];
-        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
+        const rows = XLSX.utils.sheet_to_json(sheet, {
+          header: 1,
+          raw: false
+        });
 
         rows.forEach(row => {
           text += row.join(" ") + "\n";
@@ -351,7 +484,7 @@
       if (!file) return;
 
       setStatus("جاري قراءة الملف...");
-      fileNameBox.textContent = file.name.length > 10 ? file.name.slice(0, 10) + "..." : file.name;
+      fileNameBox.textContent = shortFileName(file.name);
 
       try {
         const extension = file.name.split(".").pop().toLowerCase();
@@ -370,6 +503,15 @@
         setStatus("حصل خطأ أثناء قراءة الملف. جرّب ملف CSV أو XLSX أو TXT.");
         console.error(error);
       }
+    }
+
+    function getNextDownloadName() {
+      const currentCount = Number(localStorage.getItem("medoDownloadCount") || "0");
+      const nextCount = currentCount + 1;
+
+      localStorage.setItem("medoDownloadCount", String(nextCount));
+
+      return `Medo-${nextCount}.txt`;
     }
 
     fileInput.addEventListener("change", () => {
@@ -396,12 +538,20 @@
     copyBtn.addEventListener("click", async () => {
       if (!cleanedNumbers.length) return;
 
-      await navigator.clipboard.writeText(cleanedNumbers.join("\n"));
-      setStatus("تم نسخ الأرقام ✅");
+      try {
+        await navigator.clipboard.writeText(cleanedNumbers.join("\n"));
+        setStatus("تم نسخ الأرقام ✅");
+      } catch (error) {
+        output.select();
+        document.execCommand("copy");
+        setStatus("تم نسخ الأرقام ✅");
+      }
     });
 
     downloadBtn.addEventListener("click", () => {
       if (!cleanedNumbers.length) return;
+
+      const fileName = getNextDownloadName();
 
       const blob = new Blob([cleanedNumbers.join("\n")], {
         type: "text/plain;charset=utf-8"
@@ -411,14 +561,15 @@
       const a = document.createElement("a");
 
       a.href = url;
-      a.download = "cleaned_numbers.txt";
+      a.download = fileName;
+
       document.body.appendChild(a);
       a.click();
 
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      setStatus("تم تحميل ملف TXT ✅");
+      setStatus(`تم تحميل الملف باسم ${fileName} ✅`);
     });
 
     clearBtn.addEventListener("click", () => {
