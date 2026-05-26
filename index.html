@@ -18,7 +18,7 @@
 
     :root {
       --bg: #020617;
-      --card: rgba(15, 23, 42, 0.86);
+      --card: rgba(15, 23, 42, 0.88);
       --card2: rgba(2, 6, 23, 0.48);
       --border: rgba(148, 163, 184, 0.16);
       --text: #f8fafc;
@@ -628,7 +628,6 @@
     const rangeHint = document.getElementById("rangeHint");
 
     let cleanRows = [];
-    let cleanNumbers = [];
     let groupedByRange = {};
 
     function setStatus(text) {
@@ -636,7 +635,7 @@
     }
 
     function shortFileName(name) {
-      return name.length > 16 ? name.slice(0, 16) + "..." : name;
+      return name.length > 18 ? name.slice(0, 18) + "..." : name;
     }
 
     function cleanFilePart(value) {
@@ -676,7 +675,7 @@
     }
 
     function findHeaderIndex(row, names) {
-      const lowerNames = names.map(n => String(n).toLowerCase());
+      const lowerNames = names.map(n => String(n).trim().toLowerCase());
 
       for (let i = 0; i < row.length; i++) {
         const cell = String(row[i] || "").trim().toLowerCase();
@@ -689,16 +688,6 @@
       return -1;
     }
 
-    function getRangeValue(value) {
-      const text = String(value || "").trim();
-      return text || "Unknown Range";
-    }
-
-    function getCountryValue(value) {
-      const text = String(value || "").trim();
-      return text || "Unknown Country";
-    }
-
     function addNumberRow(numberValue, rangeValue, countryValue, rows) {
       const number = normalizeNumber(numberValue);
 
@@ -706,8 +695,8 @@
 
       rows.push({
         number,
-        range: getRangeValue(rangeValue),
-        country: getCountryValue(countryValue)
+        range: String(rangeValue || "Unknown Range").trim() || "Unknown Range",
+        country: String(countryValue || "Unknown Country").trim() || "Unknown Country"
       });
     }
 
@@ -717,6 +706,7 @@
 
       matches.forEach(match => {
         const number = normalizeNumber(match);
+
         if (isValidPhoneNumber(number)) {
           rows.push({
             number,
@@ -749,9 +739,7 @@
       rows.forEach(row => {
         const key = row.range || "Unknown Range";
 
-        if (!groups[key]) {
-          groups[key] = [];
-        }
+        if (!groups[key]) groups[key] = [];
 
         groups[key].push(row.number);
       });
@@ -759,35 +747,34 @@
       return groups;
     }
 
-    function updateOutput() {
-      cleanNumbers = cleanRows.map(row => row.number);
-      output.value = cleanNumbers.map(formatNumber).join("\n");
-      renderRanges();
-    }
-
     function renderRanges() {
       rangeList.innerHTML = "";
 
-      const rangeNames = Object.keys(groupedByRange);
-      rangeHint.textContent = rangeNames.length ? `${rangeNames.length} Range` : "لسه مفيش بيانات";
+      const ranges = Object.keys(groupedByRange);
+      rangeHint.textContent = ranges.length ? `${ranges.length} Range` : "لسه مفيش بيانات";
 
-      rangeNames.slice(0, 40).forEach(range => {
+      ranges.slice(0, 40).forEach(range => {
         const chip = document.createElement("div");
         chip.className = "chip";
         chip.innerHTML = `<b>${groupedByRange[range].length}</b> ${range}`;
         rangeList.appendChild(chip);
       });
 
-      if (rangeNames.length > 40) {
+      if (ranges.length > 40) {
         const chip = document.createElement("div");
         chip.className = "chip";
-        chip.innerHTML = `+${rangeNames.length - 40} more`;
+        chip.textContent = `+${ranges.length - 40} more`;
         rangeList.appendChild(chip);
       }
     }
 
-    function updateUI(allRows, uniqueCleanRows, name) {
-      cleanRows = uniqueCleanRows;
+    function updateOutput() {
+      output.value = cleanRows.map(row => formatNumber(row.number)).join("\n");
+      renderRanges();
+    }
+
+    function updateUI(allRows, uniqueRowsList, fileName) {
+      cleanRows = uniqueRowsList;
       groupedByRange = buildGroups(cleanRows);
 
       const countries = new Set(
@@ -800,10 +787,10 @@
       uniqueFoundBox.textContent = cleanRows.length;
       rangeCountBox.textContent = Object.keys(groupedByRange).length;
       countryCountBox.textContent = countries.size;
-      fileNameBox.textContent = shortFileName(name);
+      fileNameBox.textContent = shortFileName(fileName);
 
       selectedFile.style.display = "block";
-      selectedFile.textContent = name;
+      selectedFile.textContent = fileName;
       dropZone.classList.add("loaded");
 
       const hasNumbers = cleanRows.length > 0;
@@ -815,22 +802,30 @@
 
       updateOutput();
 
-      setStatus(
-        hasNumbers
-          ? `تمام، طلعنا ${allRows.length} رقم، وبعد التنضيف بقوا ${cleanRows.length}.`
-          : "ملقيناش أرقام مناسبة في الملف ده."
-      );
+      if (hasNumbers) {
+        setStatus(`تمام، لقينا ${allRows.length} رقم، وبعد التنضيف بقوا ${cleanRows.length}.`);
+      } else {
+        setStatus("الملف اتقرأ، بس ملقيناش أرقام مناسبة.");
+      }
     }
 
-    async function extractFromExcel(file) {
-      const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data, {
+    async function readWorkbook(file) {
+      if (typeof XLSX === "undefined") {
+        throw new Error("مكتبة قراءة Excel محملتش. اتأكد إن الإنترنت شغال واعمل Refresh.");
+      }
+
+      const buffer = await file.arrayBuffer();
+
+      return XLSX.read(buffer, {
         type: "array",
         cellText: true,
         cellDates: false
       });
+    }
 
-      const rowsOutput = [];
+    async function extractFromExcel(file) {
+      const workbook = await readWorkbook(file);
+      const finalRows = [];
 
       workbook.SheetNames.forEach(sheetName => {
         const sheet = workbook.Sheets[sheetName];
@@ -843,12 +838,12 @@
 
         if (!rows.length) return;
 
-        let headerRowIndex = -1;
+        let headerRow = -1;
         let numberCol = -1;
         let rangeCol = -1;
         let countryCol = -1;
 
-        for (let r = 0; r < Math.min(rows.length, 25); r++) {
+        for (let r = 0; r < Math.min(rows.length, 30); r++) {
           const row = rows[r];
 
           const nCol = findHeaderIndex(row, [
@@ -857,7 +852,7 @@
           ]);
 
           if (nCol !== -1) {
-            headerRowIndex = r;
+            headerRow = r;
             numberCol = nCol;
 
             rangeCol = findHeaderIndex(row, [
@@ -873,14 +868,14 @@
         }
 
         if (numberCol !== -1) {
-          for (let i = headerRowIndex + 1; i < rows.length; i++) {
+          for (let i = headerRow + 1; i < rows.length; i++) {
             const row = rows[i];
 
             addNumberRow(
               row[numberCol],
               rangeCol !== -1 ? row[rangeCol] : "Unknown Range",
               countryCol !== -1 ? row[countryCol] : "Unknown Country",
-              rowsOutput
+              finalRows
             );
           }
 
@@ -889,13 +884,12 @@
 
         rows.forEach(row => {
           row.forEach(cell => {
-            const extracted = extractNumbersFromFreeText(cell);
-            extracted.forEach(item => rowsOutput.push(item));
+            extractNumbersFromFreeText(cell).forEach(item => finalRows.push(item));
           });
         });
       });
 
-      return rowsOutput;
+      return finalRows;
     }
 
     async function extractFromText(file) {
@@ -906,12 +900,13 @@
     async function handleFile(file) {
       if (!file) return;
 
-      setStatus("بنقرأ الملف...");
-      fileNameBox.textContent = shortFileName(file.name);
-      selectedFile.style.display = "block";
-      selectedFile.textContent = file.name;
-
       try {
+        setStatus("استلمنا الملف، بنفلتره دلوقتي...");
+        selectedFile.style.display = "block";
+        selectedFile.textContent = file.name;
+        fileNameBox.textContent = shortFileName(file.name);
+        dropZone.classList.add("loaded");
+
         const extension = file.name.split(".").pop().toLowerCase();
 
         let allRows = [];
@@ -922,22 +917,20 @@
           allRows = await extractFromText(file);
         }
 
-        const uniqueCleanRows = uniqueRows(allRows);
-        updateUI(allRows, uniqueCleanRows, file.name);
+        const uniqueList = uniqueRows(allRows);
+        updateUI(allRows, uniqueList, file.name);
 
       } catch (error) {
         console.error(error);
-        setStatus("حصلت مشكلة في قراءة الملف. جرّب ترفعه بصيغة Excel أو CSV أو TXT.");
+        setStatus("حصل خطأ في قراءة الملف: " + error.message);
       }
     }
 
     function getNextNumber() {
-      const currentCount = Number(localStorage.getItem("medoDownloadCount") || "0");
-      const nextCount = currentCount + 1;
-
-      localStorage.setItem("medoDownloadCount", String(nextCount));
-
-      return nextCount;
+      const current = Number(localStorage.getItem("medoDownloadCount") || "0");
+      const next = current + 1;
+      localStorage.setItem("medoDownloadCount", String(next));
+      return next;
     }
 
     function downloadBlob(blob, fileName) {
@@ -960,6 +953,7 @@
     }
 
     dropZone.addEventListener("click", openFilePicker);
+
     chooseBtn.addEventListener("click", event => {
       event.stopPropagation();
       openFilePicker();
@@ -970,41 +964,42 @@
       handleFile(file);
     });
 
-    ["dragenter", "dragover"].forEach(eventName => {
-      window.addEventListener(eventName, e => {
-        e.preventDefault();
-      });
-
-      dropZone.addEventListener(eventName, e => {
-        e.preventDefault();
-        e.stopPropagation();
-        dropZone.classList.add("dragover");
-      });
+    dropZone.addEventListener("dragenter", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.add("dragover");
     });
 
-    ["dragleave", "drop"].forEach(eventName => {
-      dropZone.addEventListener(eventName, e => {
-        e.preventDefault();
-        e.stopPropagation();
-        dropZone.classList.remove("dragover");
-      });
+    dropZone.addEventListener("dragover", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.add("dragover");
+    });
+
+    dropZone.addEventListener("dragleave", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.remove("dragover");
     });
 
     dropZone.addEventListener("drop", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.remove("dragover");
+
       const file = e.dataTransfer.files && e.dataTransfer.files[0];
       handleFile(file);
     });
 
-    window.addEventListener("drop", e => {
-      e.preventDefault();
-    });
+    window.addEventListener("dragover", e => e.preventDefault());
+    window.addEventListener("drop", e => e.preventDefault());
 
     plusToggle.addEventListener("change", () => {
       updateOutput();
 
-      if (!cleanRows.length) return;
-
-      setStatus(plusToggle.checked ? "تمام، الأرقام دلوقتي بعلامة +." : "تمام، شيلنا علامة + من الأرقام.");
+      if (cleanRows.length) {
+        setStatus(plusToggle.checked ? "الأرقام دلوقتي بعلامة +." : "الأرقام دلوقتي بدون علامة +.");
+      }
     });
 
     copyBtn.addEventListener("click", async () => {
@@ -1015,7 +1010,7 @@
       try {
         await navigator.clipboard.writeText(text);
         setStatus("اتنسخوا خلاص ✅");
-      } catch (error) {
+      } catch {
         output.select();
         document.execCommand("copy");
         setStatus("اتنسخوا خلاص ✅");
@@ -1035,11 +1030,16 @@
       });
 
       downloadBlob(blob, fileName);
-      setStatus(`تم تحميل كل الأرقام في ${fileName} ✅`);
+      setStatus(`تم تحميل الملف باسم ${fileName} ✅`);
     });
 
     downloadRangesBtn.addEventListener("click", async () => {
       if (!cleanRows.length) return;
+
+      if (typeof JSZip === "undefined") {
+        setStatus("مكتبة ZIP محملتش. اعمل Refresh وجرب تاني.");
+        return;
+      }
 
       const zip = new JSZip();
       const count = getNextNumber();
@@ -1049,8 +1049,7 @@
           .map(formatNumber)
           .join("\n");
 
-        const safeRange = cleanFilePart(range);
-        zip.file(`Medo-${safeRange}.txt`, numbers);
+        zip.file(`Medo-${cleanFilePart(range)}.txt`, numbers);
       });
 
       const blob = await zip.generateAsync({
@@ -1065,7 +1064,6 @@
 
     clearBtn.addEventListener("click", () => {
       cleanRows = [];
-      cleanNumbers = [];
       groupedByRange = {};
 
       output.value = "";
