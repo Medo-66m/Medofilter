@@ -13,11 +13,12 @@
     * {
       box-sizing: border-box;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-tap-highlight-color: transparent;
     }
 
     :root {
       --bg: #020617;
-      --card: rgba(15, 23, 42, 0.82);
+      --card: rgba(15, 23, 42, 0.86);
       --card2: rgba(2, 6, 23, 0.48);
       --border: rgba(148, 163, 184, 0.16);
       --text: #f8fafc;
@@ -26,11 +27,6 @@
       --green2: #86efac;
       --red: #ef4444;
       --blue: #38bdf8;
-      --yellow: #facc15;
-    }
-
-    html {
-      scroll-behavior: smooth;
     }
 
     body {
@@ -54,7 +50,7 @@
 
     .container {
       width: 100%;
-      max-width: 1120px;
+      max-width: 1180px;
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 32px;
@@ -87,9 +83,6 @@
 
     .badge {
       display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
       padding: 8px 15px;
       border-radius: 999px;
       background: rgba(34, 197, 94, 0.12);
@@ -98,13 +91,14 @@
       font-size: 13px;
       margin-bottom: 14px;
       direction: ltr;
+      font-weight: 800;
     }
 
     h1 {
       margin: 0;
       font-size: clamp(31px, 5vw, 54px);
       line-height: 1.12;
-      letter-spacing: -1.2px;
+      letter-spacing: -1px;
     }
 
     .subtitle {
@@ -112,12 +106,12 @@
       margin: 14px auto 0;
       line-height: 1.85;
       font-size: 15px;
-      max-width: 710px;
+      max-width: 740px;
     }
 
     .layout {
       display: grid;
-      grid-template-columns: 0.92fr 1.08fr;
+      grid-template-columns: 0.95fr 1.05fr;
       gap: 20px;
       align-items: stretch;
     }
@@ -130,7 +124,7 @@
     }
 
     .drop-zone {
-      min-height: 245px;
+      min-height: 270px;
       border: 2px dashed rgba(148, 163, 184, 0.32);
       border-radius: 24px;
       padding: 26px 18px;
@@ -141,6 +135,7 @@
       display: flex;
       flex-direction: column;
       justify-content: center;
+      user-select: none;
     }
 
     .drop-zone:hover,
@@ -150,8 +145,13 @@
       transform: translateY(-2px);
     }
 
+    .drop-zone.loaded {
+      border-color: rgba(34, 197, 94, 0.8);
+      background: rgba(34, 197, 94, 0.06);
+    }
+
     .upload-icon {
-      font-size: 48px;
+      font-size: 50px;
       margin-bottom: 12px;
     }
 
@@ -160,13 +160,37 @@
     }
 
     .drop-zone strong {
-      font-size: 18px;
+      font-size: 19px;
     }
 
     .small {
       color: var(--muted);
       font-size: 13px;
       line-height: 1.7;
+    }
+
+    .choose-btn {
+      margin: 16px auto 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: fit-content;
+      min-width: 170px;
+      padding: 12px 18px;
+      border-radius: 999px;
+      background: var(--green);
+      color: #020617;
+      font-weight: 900;
+      font-size: 14px;
+    }
+
+    .selected-file {
+      margin-top: 14px;
+      direction: ltr;
+      color: #d1fae5;
+      font-size: 13px;
+      word-break: break-all;
+      display: none;
     }
 
     input[type="file"] {
@@ -296,11 +320,6 @@
       filter: brightness(1.08);
     }
 
-    button.secondary {
-      background: #334155;
-      color: #e5e7eb;
-    }
-
     button.blue {
       background: var(--blue);
       color: #001018;
@@ -320,7 +339,7 @@
 
     textarea {
       width: 100%;
-      min-height: 365px;
+      min-height: 385px;
       resize: vertical;
       background: rgba(2, 6, 23, 0.92);
       color: #d1fae5;
@@ -332,10 +351,6 @@
       font-size: 15px;
       direction: ltr;
       text-align: left;
-    }
-
-    textarea:focus {
-      border-color: rgba(34, 197, 94, 0.6);
     }
 
     .range-box {
@@ -404,6 +419,16 @@
       direction: ltr;
     }
 
+    @media (min-width: 901px) {
+      .container {
+        min-height: 720px;
+      }
+
+      .panel {
+        height: 100%;
+      }
+    }
+
     @media (max-width: 900px) {
       body {
         padding: 14px;
@@ -456,7 +481,7 @@
       }
 
       .drop-zone {
-        min-height: 190px;
+        min-height: 205px;
         padding: 22px 12px;
         border-radius: 19px;
       }
@@ -505,13 +530,15 @@
 
         <section class="layout">
           <div class="panel">
-            <label class="drop-zone" id="dropZone">
+            <div class="drop-zone" id="dropZone">
               <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.txt,.log,.json,.html,.xml" />
               <div class="upload-icon">📂</div>
               <p><strong>اختار الملف من هنا</strong></p>
-              <p class="small">أو اسحبه وحطه هنا</p>
+              <p class="small">على الكمبيوتر تقدر تسحب الملف وترميه هنا مباشرة</p>
               <p class="small">Excel / CSV / TXT وأي ملف نصي عادي</p>
-            </label>
+              <div class="choose-btn" id="chooseBtn">اختيار ملف</div>
+              <div class="selected-file" id="selectedFile"></div>
+            </div>
 
             <section class="stats">
               <div class="stat">
@@ -581,6 +608,9 @@
   <script>
     const fileInput = document.getElementById("fileInput");
     const dropZone = document.getElementById("dropZone");
+    const chooseBtn = document.getElementById("chooseBtn");
+    const selectedFile = document.getElementById("selectedFile");
+
     const output = document.getElementById("output");
     const copyBtn = document.getElementById("copyBtn");
     const downloadAllBtn = document.getElementById("downloadAllBtn");
@@ -732,7 +762,6 @@
     function updateOutput() {
       cleanNumbers = cleanRows.map(row => row.number);
       output.value = cleanNumbers.map(formatNumber).join("\n");
-
       renderRanges();
     }
 
@@ -772,6 +801,10 @@
       rangeCountBox.textContent = Object.keys(groupedByRange).length;
       countryCountBox.textContent = countries.size;
       fileNameBox.textContent = shortFileName(name);
+
+      selectedFile.style.display = "block";
+      selectedFile.textContent = name;
+      dropZone.classList.add("loaded");
 
       const hasNumbers = cleanRows.length > 0;
 
@@ -875,6 +908,8 @@
 
       setStatus("بنقرأ الملف...");
       fileNameBox.textContent = shortFileName(file.name);
+      selectedFile.style.display = "block";
+      selectedFile.textContent = file.name;
 
       try {
         const extension = file.name.split(".").pop().toLowerCase();
@@ -919,30 +954,57 @@
       URL.revokeObjectURL(url);
     }
 
-    fileInput.addEventListener("change", () => {
-      handleFile(fileInput.files[0]);
+    function openFilePicker() {
+      fileInput.value = "";
+      fileInput.click();
+    }
+
+    dropZone.addEventListener("click", openFilePicker);
+    chooseBtn.addEventListener("click", event => {
+      event.stopPropagation();
+      openFilePicker();
     });
 
-    dropZone.addEventListener("dragover", e => {
-      e.preventDefault();
-      dropZone.classList.add("dragover");
+    fileInput.addEventListener("change", event => {
+      const file = event.target.files && event.target.files[0];
+      handleFile(file);
     });
 
-    dropZone.addEventListener("dragleave", () => {
-      dropZone.classList.remove("dragover");
+    ["dragenter", "dragover"].forEach(eventName => {
+      window.addEventListener(eventName, e => {
+        e.preventDefault();
+      });
+
+      dropZone.addEventListener(eventName, e => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add("dragover");
+      });
+    });
+
+    ["dragleave", "drop"].forEach(eventName => {
+      dropZone.addEventListener(eventName, e => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove("dragover");
+      });
     });
 
     dropZone.addEventListener("drop", e => {
-      e.preventDefault();
-      dropZone.classList.remove("dragover");
-
-      const file = e.dataTransfer.files[0];
+      const file = e.dataTransfer.files && e.dataTransfer.files[0];
       handleFile(file);
+    });
+
+    window.addEventListener("drop", e => {
+      e.preventDefault();
     });
 
     plusToggle.addEventListener("change", () => {
       updateOutput();
-      setStatus(plusToggle.checked ? "تم تفعيل علامة + قبل الأرقام." : "تم إزالة علامة + من الأرقام.");
+
+      if (!cleanRows.length) return;
+
+      setStatus(plusToggle.checked ? "تمام، الأرقام دلوقتي بعلامة +." : "تمام، شيلنا علامة + من الأرقام.");
     });
 
     copyBtn.addEventListener("click", async () => {
@@ -1014,6 +1076,10 @@
       rangeCountBox.textContent = "0";
       countryCountBox.textContent = "0";
       fileNameBox.textContent = "---";
+
+      selectedFile.style.display = "none";
+      selectedFile.textContent = "";
+      dropZone.classList.remove("loaded");
 
       rangeList.innerHTML = "";
       rangeHint.textContent = "لسه مفيش بيانات";
