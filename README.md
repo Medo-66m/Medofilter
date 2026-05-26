@@ -1,2 +1,0 @@
-# Medofilter
-For filter numbers
