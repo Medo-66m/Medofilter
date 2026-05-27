@@ -46,6 +46,28 @@ export function cleanPhone(raw: unknown): string | null {
   return digitsOnly;
 }
 
+export function cleanOtpCode(raw: unknown): string | null {
+  if (raw === null || raw === undefined) return null;
+
+  const normalized = normalizeDigits(String(raw)).trim();
+  if (!normalized) return null;
+
+  const digitsOnly = normalized.replace(/[^\d]/g, "");
+  if (digitsOnly.length < 4 || digitsOnly.length > 8) return null;
+
+  return digitsOnly;
+}
+
+export function extractOtpFromText(raw: unknown): string | null {
+  if (raw === null || raw === undefined) return null;
+
+  const normalized = normalizeDigits(String(raw));
+  const match = normalized.match(/\b(\d{4,8})\b/);
+  if (!match) return null;
+
+  return cleanOtpCode(match[1]);
+}
+
 export function extractPhoneCandidates(raw: unknown): string[] {
   if (raw === null || raw === undefined) return [];
 
@@ -79,6 +101,19 @@ export function dedupePreserveOrder(values: string[]): string[] {
 
 export function withOptionalPlus(value: string, addPlus: boolean): string {
   return addPlus ? `+${value}` : value;
+}
+
+export function formatOutputLine(line: string, addPlus: boolean): string {
+  if (!addPlus) return line;
+
+  const parts = line.split("|");
+  if (parts.length >= 2) {
+    const phone = parts[0]?.trim() ?? "";
+    const rest = parts.slice(1).join("|");
+    return `+${phone}|${rest}`;
+  }
+
+  return `+${line}`;
 }
 
 export function safeFilePart(input: string): string {
