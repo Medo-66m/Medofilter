@@ -205,6 +205,64 @@ function pushEntry(
   });
 }
 
+function pushRawEntry(
+  destination: ExtractedEntry[],
+  value: string,
+  outputLine: string,
+  range: string | null,
+  country: string | null,
+  sheetName: string | null,
+  sourceColumn: string | null
+) {
+  destination.push({
+    value,
+    outputLine,
+    range,
+    country,
+    sourceSheet: sheetName,
+    sourceColumn
+  });
+}
+
+function getAccountPrefix(accountId: string): string {
+  if (accountId.startsWith("1000")) return "1000";
+  return accountId.slice(0, 4);
+}
+
+function parseAccountLine(line: string): { accountId: string; outputLine: string; group: string } | null {
+  const normalized = normalizeDigits(line).trim();
+  if (!normalized) return null;
+
+  const match = normalized.match(/^(\d{11,20})\|(.+)$/);
+  if (!match) return null;
+
+  const accountId = match[1]?.trim() ?? "";
+  if (!accountId) return null;
+
+  return {
+    accountId,
+    outputLine: normalized,
+    group: getAccountPrefix(accountId)
+  };
+}
+
+function extractAccountLinesFromText(text: string): Array<{
+  accountId: string;
+  outputLine: string;
+  group: string;
+}> {
+  const normalized = normalizeDigits(text);
+  const matches = normalized.match(/\d{11,20}\|[^\r\n]+/g) ?? [];
+  const result: Array<{ accountId: string; outputLine: string; group: string }> = [];
+
+  for (const match of matches) {
+    const parsed = parseAccountLine(match);
+    if (parsed) result.push(parsed);
+  }
+
+  return result;
+}
+
 function extractRowsDirectly(rows: string[][], sheetName: string | null): ExtractedEntry[] {
   if (rows.length === 0) return [];
 
@@ -423,7 +481,55 @@ function buildResult(fileName: string, entries: ExtractedEntry[], sheets: string
     groupedByRange,
     countries: [...countriesSet],
     sheets,
-    outputMode
+    outputMode,
+    summaryLabel: "Ranges"
+  };
+}
+
+function buildAccountResult(
+  fileName: string,
+  accountEntries: Array<{ accountId: string; outputLine: string; group: string }>
+): ParsedResult {
+  const originalCount = accountEntries.length;
+  const uniqueEntries: Array<{ accountId: string; outputLine: string; group: string }> = [];
+  const seen = new Set<string>();
+
+  for (const entry of accountEntries) {
+    if (seen.has(entry.outputLine)) continue;
+    seen.add(entry.outputLine);
+    uniqueEntries.push(entry);
+  }
+
+  const groupedByRangeMap = new Map<string, string[]>();
+
+  for (const entry of uniqueEntries) {
+    const existing = groupedByRangeMap.get(entry.group) ?? [];
+    existing.push(entry.outputLine);
+    groupedByRangeMap.set(entry.group, existing);
+  }
+
+  const groupedByRange: Record<string, string[]> = {};
+  const rangeSummary: RangeSummaryItem[] = [...groupedByRangeMap.entries()]
+    .map(([range, values]) => {
+      groupedByRange[range] = values;
+      return { range, count: values.length };
+    })
+    .sort((a, b) => a.range.localeCompare(b.range));
+
+  return {
+    fileName,
+    originalCount,
+    cleanedCount: uniqueEntries.length,
+    rangesCount: rangeSummary.length,
+    countriesCount: 0,
+    rangeSummary,
+    numbers: uniqueEntries.map((entry) => entry.accountId),
+    outputLines: uniqueEntries.map((entry) => entry.outputLine),
+    groupedByRange,
+    countries: [],
+    sheets: [],
+    outputMode: "accounts",
+    summaryLabel: "Groups"
   };
 }
 
@@ -488,6 +594,11 @@ function parseDelimitedOtpLine(line: string): { phone: string; code: string } | 
 }
 
 function parseTextLikeFile(fileName: string, text: string): ParsedResult {
+  const accountEntries = extractAccountLinesFromText(text);
+  if (accountEntries.length > 0) {
+    return buildAccountResult(fileName, accountEntries);
+  }
+
   const entries: ExtractedEntry[] = [];
   const lines = text.split(/\r?\n/);
 
@@ -554,6 +665,11 @@ function parseJsonNode(node: unknown, entries: ExtractedEntry[]) {
 }
 
 function parseJsonFile(fileName: string, text: string): ParsedResult {
+  const accountEntries = extractAccountLinesFromText(text);
+  if (accountEntries.length > 0) {
+    return buildAccountResult(fileName, accountEntries);
+  }
+
   let parsed: unknown;
 
   try {
@@ -607,6 +723,22 @@ export function ensureDisplayNumbers(numbers: string[], addPlus: boolean): strin
 }
 
 export function validateParsedResult(result: ParsedResult): ParsedResult {
+  if (result.outputMode === "accounts") {
+    const dedupedOutputLines = dedupePreserveOrder(
+      result.outputLines.filter((line) => /^\d{11,20}\|/.test(normalizeDigits(line)))
+    );
+    const dedupedNumbers = dedupePreserveOrder(
+      dedupedOutputLines.map((line) => line.split("|")[0] ?? line)
+    );
+
+    return {
+      ...result,
+      outputLines: dedupedOutputLines,
+      numbers: dedupedNumbers,
+      cleanedCount: dedupedOutputLines.length
+    };
+  }
+
   const validatedEntries = result.outputLines
     .map((line) => {
       const parts = line.split("|");
