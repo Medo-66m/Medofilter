@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import {
+  Bug,
   CheckCircle2,
   Clipboard,
   Download,
@@ -22,6 +23,23 @@ import type { ParsedResult, StatusTone } from "@/lib/types";
 type StatusState = {
   tone: StatusTone;
   message: string;
+};
+
+type DebugState = {
+  fileName: string;
+  extension: string;
+  parseStartedAt: string;
+  parseFinishedAt: string | null;
+  error: string | null;
+  resultSnapshot: {
+    originalCount: number;
+    cleanedCount: number;
+    rangesCount: number;
+    countriesCount: number;
+    sheets: string[];
+    firstNumbers: string[];
+    firstRanges: Array<{ range: string; count: number }>;
+  } | null;
 };
 
 const ACCEPTED_FILES = ".xlsx,.csv,.txt,.log,.json,.html,.xml";
@@ -66,10 +84,14 @@ function StatCard({
   return (
     <div className="glass rounded-[1.4rem] p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-accent">
       <div className="text-sm text-muted">{label}</div>
-      <div className="mt-2 text-2xl font-semibold tracking-tight text-text">{value}</div>
+      <div className="mt-2 text-2xl font-semibold tracking-tight text-text break-words">{value}</div>
       {hint ? <div className="mt-1 text-xs text-slate-400">{hint}</div> : null}
     </div>
   );
+}
+
+function createInitialDebug(): DebugState | null {
+  return null;
 }
 
 export default function MedoFilterApp() {
@@ -80,6 +102,7 @@ export default function MedoFilterApp() {
     tone: "idle",
     message: "ارفع الملف، وسأعالج كل الأرقام كاملة وأعرض لك أول 20 رقم فقط."
   });
+  const [debugInfo, setDebugInfo] = useState<DebugState | null>(createInitialDebug());
   const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [addPlus, setAddPlus] = useState(false);
@@ -99,6 +122,19 @@ export default function MedoFilterApp() {
   async function handleSelectedFile(file: File) {
     setLoading(true);
     setCopyDone(false);
+
+    const startedAt = new Date().toISOString();
+    const extension = file.name.toLowerCase().split(".").pop() ?? "";
+
+    setDebugInfo({
+      fileName: file.name,
+      extension,
+      parseStartedAt: startedAt,
+      parseFinishedAt: null,
+      error: null,
+      resultSnapshot: null
+    });
+
     setStatus({
       tone: "info",
       message: `جاري قراءة الملف ${file.name} وتحليل الأرقام...`
@@ -106,6 +142,26 @@ export default function MedoFilterApp() {
 
     try {
       const parsed = validateParsedResult(await parseFile(file));
+
+      const finishedAt = new Date().toISOString();
+
+      setDebugInfo({
+        fileName: file.name,
+        extension,
+        parseStartedAt: startedAt,
+        parseFinishedAt: finishedAt,
+        error: null,
+        resultSnapshot: {
+          originalCount: parsed.originalCount,
+          cleanedCount: parsed.cleanedCount,
+          rangesCount: parsed.rangesCount,
+          countriesCount: parsed.countriesCount,
+          sheets: parsed.sheets,
+          firstNumbers: parsed.numbers.slice(0, 20),
+          firstRanges: parsed.rangeSummary.slice(0, 20)
+        }
+      });
+
       setResult(parsed);
 
       if (parsed.cleanedCount === 0) {
@@ -127,7 +183,18 @@ export default function MedoFilterApp() {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "حدث خطأ غير متوقع أثناء قراءة الملف.";
+      const finishedAt = new Date().toISOString();
+
       setResult(null);
+      setDebugInfo({
+        fileName: file.name,
+        extension,
+        parseStartedAt: startedAt,
+        parseFinishedAt: finishedAt,
+        error: message,
+        resultSnapshot: null
+      });
+
       setStatus({
         tone: "error",
         message
@@ -331,27 +398,27 @@ export default function MedoFilterApp() {
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
               <StatCard
                 label="الملف"
-                value={result?.fileName ?? "—"}
-                hint={result ? "تمت قراءته" : "بانتظار الرفع"}
+                value={result?.fileName ?? debugInfo?.fileName ?? "—"}
+                hint={result || debugInfo ? "تمت قراءته" : "بانتظار الرفع"}
               />
               <StatCard
                 label="قبل حذف التكرار"
-                value={result?.originalCount ?? 0}
+                value={result?.originalCount ?? debugInfo?.resultSnapshot?.originalCount ?? 0}
                 hint="بعد التنظيف الأولي"
               />
               <StatCard
                 label="بعد التنظيف والحذف"
-                value={result?.cleanedCount ?? 0}
+                value={result?.cleanedCount ?? debugInfo?.resultSnapshot?.cleanedCount ?? 0}
                 hint="النتيجة النهائية"
               />
               <StatCard
                 label="عدد الـ Ranges"
-                value={result?.rangesCount ?? 0}
+                value={result?.rangesCount ?? debugInfo?.resultSnapshot?.rangesCount ?? 0}
                 hint="من البيانات المتاحة"
               />
               <StatCard
                 label="عدد الدول"
-                value={result?.countriesCount ?? 0}
+                value={result?.countriesCount ?? debugInfo?.resultSnapshot?.countriesCount ?? 0}
                 hint="إن كانت موجودة"
               />
               <StatCard
@@ -433,6 +500,48 @@ export default function MedoFilterApp() {
                     لا توجد ranges ظاهرة في الملف الحالي.
                   </div>
                 )}
+              </div>
+            </div>
+
+            <div className="glass rounded-[1.75rem] border border-amber-400/20 bg-amber-400/5 p-5 sm:p-6">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="rounded-2xl bg-amber-400/10 p-3">
+                  <Bug className="h-5 w-5 text-amber-300" />
+                </div>
+                <div>
+                  <h2 className="m-0 text-xl font-semibold text-amber-100">Debug</h2>
+                  <p className="mt-1 text-sm text-amber-100/80">
+                    ابعت لي هذا القسم كما هو لو ما زالت المشكلة موجودة.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="mb-2 text-sm font-medium text-slate-200">معلومات الملف</div>
+                  <pre className="m-0 whitespace-pre-wrap break-words text-xs leading-6 text-slate-300">
+{JSON.stringify(
+  debugInfo
+    ? {
+        fileName: debugInfo.fileName,
+        extension: debugInfo.extension,
+        parseStartedAt: debugInfo.parseStartedAt,
+        parseFinishedAt: debugInfo.parseFinishedAt,
+        error: debugInfo.error
+      }
+    : null,
+  null,
+  2
+)}
+                  </pre>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="mb-2 text-sm font-medium text-slate-200">ملخص النتيجة</div>
+                  <pre className="m-0 whitespace-pre-wrap break-words text-xs leading-6 text-slate-300">
+{JSON.stringify(debugInfo?.resultSnapshot ?? null, null, 2)}
+                  </pre>
+                </div>
               </div>
             </div>
           </section>
