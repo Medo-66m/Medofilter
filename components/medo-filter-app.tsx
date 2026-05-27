@@ -17,7 +17,7 @@ import {
 import { downloadNumbersTxt, downloadRangesZip } from "@/lib/download";
 import { nextFileDownloadName } from "@/lib/counters";
 import { parseFile, validateParsedResult } from "@/lib/file-parser";
-import { safeFilePart, withOptionalPlus } from "@/lib/phone";
+import { formatOutputLine, safeFilePart } from "@/lib/phone";
 import type { ParsedResult, StatusTone } from "@/lib/types";
 
 type StatusState = {
@@ -122,9 +122,9 @@ function ActionButton({
   );
 }
 
-function downloadSingleRangeTxt(range: string, numbers: string[], addPlus: boolean) {
+function downloadSingleRangeTxt(range: string, lines: string[], addPlus: boolean) {
   const fileName = `${safeFilePart(range)}-${nextFileDownloadName()}`;
-  const content = numbers.map((value) => withOptionalPlus(value, addPlus)).join("\n");
+  const content = lines.map((line) => formatOutputLine(line, addPlus)).join("\n");
   const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -149,13 +149,13 @@ export default function MedoFilterApp() {
   const [addPlus, setAddPlus] = useState(false);
   const [copyDone, setCopyDone] = useState(false);
 
-  const displayNumbers = useMemo(() => {
+  const displayLines = useMemo(() => {
     if (!result) return [];
-    return result.numbers.map((value) => withOptionalPlus(value, addPlus));
+    return result.outputLines.map((line) => formatOutputLine(line, addPlus));
   }, [result, addPlus]);
 
-  const previewNumbers = useMemo(() => displayNumbers.slice(0, PREVIEW_LIMIT), [displayNumbers]);
-  const hiddenCount = Math.max(displayNumbers.length - previewNumbers.length, 0);
+  const previewLines = useMemo(() => displayLines.slice(0, PREVIEW_LIMIT), [displayLines]);
+  const hiddenCount = Math.max(displayLines.length - previewLines.length, 0);
 
   async function handleSelectedFile(file: File) {
     setLoading(true);
@@ -173,15 +173,15 @@ export default function MedoFilterApp() {
       if (parsed.cleanedCount === 0) {
         setStatus({
           tone: "error",
-          message: "لم أجد أرقامًا صالحة داخل الملف."
+          message: "لم أجد بيانات صالحة داخل الملف."
         });
       } else {
         setStatus({
           tone: "success",
           message:
             parsed.cleanedCount > PREVIEW_LIMIT
-              ? `تم العثور على ${parsed.cleanedCount} رقمًا. المعروض أول ${PREVIEW_LIMIT} فقط.`
-              : `تم العثور على ${parsed.cleanedCount} رقمًا.`
+              ? `تم العثور على ${parsed.cleanedCount} سطرًا. المعروض أول ${PREVIEW_LIMIT} فقط.`
+              : `تم العثور على ${parsed.cleanedCount} سطرًا.`
         });
       }
     } catch (error) {
@@ -212,14 +212,14 @@ export default function MedoFilterApp() {
   }
 
   async function onCopy() {
-    if (!displayNumbers.length) return;
+    if (!displayLines.length) return;
 
     try {
-      await navigator.clipboard.writeText(displayNumbers.join("\n"));
+      await navigator.clipboard.writeText(displayLines.join("\n"));
       setCopyDone(true);
       setStatus({
         tone: "success",
-        message: `تم نسخ ${displayNumbers.length} رقمًا.`
+        message: `تم نسخ ${displayLines.length} سطرًا.`
       });
       window.setTimeout(() => setCopyDone(false), 1800);
     } catch {
@@ -231,18 +231,18 @@ export default function MedoFilterApp() {
   }
 
   async function onDownloadAll() {
-    if (!result?.numbers.length) return;
+    if (!result?.outputLines.length) return;
 
     try {
-      downloadNumbersTxt(result.numbers, addPlus);
+      downloadNumbersTxt(result.outputLines, addPlus);
       setStatus({
         tone: "success",
-        message: `تم تنزيل ${result.numbers.length} رقمًا.`
+        message: `تم تنزيل ${result.outputLines.length} سطرًا.`
       });
     } catch {
       setStatus({
         tone: "error",
-        message: "فشل إنشاء ملف TXT."
+        message: "فشل إنشاء الملف."
       });
     }
   }
@@ -267,20 +267,20 @@ export default function MedoFilterApp() {
   async function onDownloadSingleRange(range: string) {
     if (!result) return;
 
-    const numbers = result.groupedByRange[range] ?? [];
-    if (numbers.length === 0) {
+    const lines = result.groupedByRange[range] ?? [];
+    if (lines.length === 0) {
       setStatus({
         tone: "error",
-        message: "هذا الـ range لا يحتوي على أرقام."
+        message: "هذا الـ range لا يحتوي على بيانات."
       });
       return;
     }
 
     try {
-      downloadSingleRangeTxt(range, numbers, addPlus);
+      downloadSingleRangeTxt(range, lines, addPlus);
       setStatus({
         tone: "success",
-        message: `تم تنزيل ${numbers.length} رقمًا من ${range}.`
+        message: `تم تنزيل ${lines.length} سطرًا من ${range}.`
       });
     } catch {
       setStatus({
@@ -315,7 +315,7 @@ export default function MedoFilterApp() {
                 <StatCard label="Formats" value="7" />
                 <StatCard label="Length" value="10–15" />
                 <StatCard label="Preview" value="20" />
-                <StatCard label="Export" value="TXT / ZIP" />
+                <StatCard label="Export" value={result?.outputMode === "pairs" ? "PAIR / ZIP" : "TXT / ZIP"} />
               </div>
             </div>
           </div>
@@ -417,17 +417,17 @@ export default function MedoFilterApp() {
               <StatCard label="Countries" value={result?.countriesCount ?? 0} />
               <StatCard
                 label="Visible"
-                value={result ? `${previewNumbers.length}/${displayNumbers.length}` : "0/0"}
+                value={result ? `${previewLines.length}/${displayLines.length}` : "0/0"}
               />
             </div>
 
             <div className="glass rounded-[1.75rem] p-5 sm:p-6">
-              <SectionTitle title="Actions" subtitle="Copy or export all numbers." />
+              <SectionTitle title="Actions" subtitle="Copy or export all results." />
 
               <div className="flex flex-wrap gap-3">
                 <ActionButton
                   onClick={onCopy}
-                  disabled={!result?.numbers.length || loading}
+                  disabled={!result?.outputLines.length || loading}
                   variant="secondary"
                 >
                   <Clipboard className="h-4 w-4" />
@@ -436,7 +436,7 @@ export default function MedoFilterApp() {
 
                 <ActionButton
                   onClick={onDownloadAll}
-                  disabled={!result?.numbers.length || loading}
+                  disabled={!result?.outputLines.length || loading}
                   variant="primary"
                 >
                   <Download className="h-4 w-4" />
@@ -471,7 +471,7 @@ export default function MedoFilterApp() {
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="min-w-0">
                           <div className="truncate text-sm font-medium text-slate-200">{item.range}</div>
-                          <div className="mt-1 text-xs text-slate-500">{item.count} numbers</div>
+                          <div className="mt-1 text-xs text-slate-500">{item.count} lines</div>
                         </div>
 
                         <div className="flex shrink-0 items-center gap-2">
@@ -504,7 +504,7 @@ export default function MedoFilterApp() {
             <div className="glass rounded-[1.75rem] p-5 sm:p-6">
               <SectionTitle
                 title="Preview"
-                subtitle="First 20 numbers"
+                subtitle={result?.outputMode === "pairs" ? "First 20 results" : "First 20 numbers"}
                 right={
                   <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
                     <Eye className="h-4 w-4" />
@@ -515,7 +515,7 @@ export default function MedoFilterApp() {
 
               {result && hiddenCount > 0 ? (
                 <div className="mb-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100">
-                  Showing {previewNumbers.length}. The rest is included in copy and download.
+                  Showing {previewLines.length}. The rest is included in copy and download.
                 </div>
               ) : null}
 
@@ -526,7 +526,7 @@ export default function MedoFilterApp() {
 
                 <div className="max-h-[680px] overflow-auto scrollbar-thin">
                   <pre className="m-0 whitespace-pre-wrap break-all p-4 text-sm leading-7 text-slate-200">
-                    {previewNumbers.length ? previewNumbers.join("\n") : "No output yet."}
+                    {previewLines.length ? previewLines.join("\n") : "No output yet."}
                   </pre>
                 </div>
               </div>
