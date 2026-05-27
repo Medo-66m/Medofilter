@@ -53,51 +53,8 @@ function isRowEmpty(row: unknown[]): boolean {
   return !row.some((cell) => sanitizeCell(cell) !== "");
 }
 
-function normalizeMatrixCell(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  return sanitizeCell(value);
-}
-
-function findBestHeaderKey(keys: string[], kind: "phone" | "range" | "country"): string | null {
-  const normalizedKeys = keys.map((key) => ({
-    original: key,
-    normalized: normalizeHeader(key)
-  }));
-
-  if (kind === "phone") {
-    const exactNumber = normalizedKeys.find((item) => item.normalized === "number");
-    if (exactNumber) return exactNumber.original;
-
-    const exactPhone = normalizedKeys.find((item) => PHONE_HEADER_EXACT.includes(item.normalized));
-    if (exactPhone) return exactPhone.original;
-
-    const includesPhone = normalizedKeys.find((item) =>
-      /(phone|mobile|telephone|tel|cell|whatsapp|msisdn|contact)/.test(item.normalized)
-    );
-    if (includesPhone) return includesPhone.original;
-  }
-
-  if (kind === "range") {
-    const exactRange = normalizedKeys.find((item) => RANGE_HEADER_EXACT.includes(item.normalized));
-    if (exactRange) return exactRange.original;
-
-    const includesRange = normalizedKeys.find((item) =>
-      /(range|prefix|series|batch)/.test(item.normalized)
-    );
-    if (includesRange) return includesRange.original;
-  }
-
-  if (kind === "country") {
-    const exactCountry = normalizedKeys.find((item) => COUNTRY_HEADER_EXACT.includes(item.normalized));
-    if (exactCountry) return exactCountry.original;
-
-    const includesCountry = normalizedKeys.find((item) =>
-      /(country|nation)/.test(item.normalized)
-    );
-    if (includesCountry) return includesCountry.original;
-  }
-
-  return null;
+function normalizeMatrix(rows: unknown[][]): string[][] {
+  return rows.map((row) => row.map((cell) => sanitizeCell(cell)));
 }
 
 function scoreHeaderRow(row: string[]): number {
@@ -107,17 +64,18 @@ function scoreHeaderRow(row: string[]): number {
   let score = 0;
 
   for (const cell of normalizedCells) {
-    if (cell === "number") score += 20;
+    if (cell === "number") score += 30;
     if (PHONE_HEADER_EXACT.includes(cell)) score += 12;
-    if (RANGE_HEADER_EXACT.includes(cell)) score += 8;
-    if (COUNTRY_HEADER_EXACT.includes(cell)) score += 8;
-    if (/(phone|mobile|telephone|tel|cell|whatsapp|msisdn|contact)/.test(cell)) score += 10;
+    if (RANGE_HEADER_EXACT.includes(cell)) score += 10;
+    if (COUNTRY_HEADER_EXACT.includes(cell)) score += 10;
+    if (/(phone|mobile|telephone|tel|cell|whatsapp|msisdn|contact)/.test(cell)) score += 8;
     if (/(range|prefix|series|batch)/.test(cell)) score += 6;
     if (/(country|nation)/.test(cell)) score += 6;
   }
 
-  if (normalizedCells.includes("number")) score += 25;
-  if (normalizedCells.includes("range") && normalizedCells.includes("number")) score += 20;
+  if (normalizedCells.includes("number")) score += 30;
+  if (normalizedCells.includes("range")) score += 10;
+  if (normalizedCells.includes("number") && normalizedCells.includes("range")) score += 20;
 
   return score;
 }
@@ -127,52 +85,43 @@ function detectHeaderRowIndex(rows: string[][]): number {
   let bestIndex = -1;
   let bestScore = 0;
 
-  for (let index = 0; index < limit; index += 1) {
-    const row = rows[index] ?? [];
-    const score = scoreHeaderRow(row);
-
+  for (let i = 0; i < limit; i += 1) {
+    const score = scoreHeaderRow(rows[i] ?? []);
     if (score > bestScore) {
       bestScore = score;
-      bestIndex = index;
+      bestIndex = i;
     }
   }
 
   return bestScore > 0 ? bestIndex : -1;
 }
 
-function normalizeRowToObjects(rows: string[][]): Record<string, unknown>[] {
-  if (rows.length === 0) return [];
+function findColumnIndex(headers: string[], kind: "phone" | "range" | "country"): number {
+  const normalizedHeaders = headers.map((header) => normalizeHeader(header));
 
-  const headerIndex = detectHeaderRowIndex(rows);
+  if (kind === "phone") {
+    const exactNumberIndex = normalizedHeaders.findIndex((value) => value === "number");
+    if (exactNumberIndex !== -1) return exactNumberIndex;
 
-  if (headerIndex === -1) {
-    return rows
-      .filter((row) => !isRowEmpty(row))
-      .map((row, rowIndex) => {
-        const record: Record<string, unknown> = {};
-        row.forEach((value, columnIndex) => {
-          record[`column_${rowIndex}_${columnIndex}`] = value;
-        });
-        return record;
-      });
+    const exactPhoneIndex = normalizedHeaders.findIndex((value) => PHONE_HEADER_EXACT.includes(value));
+    if (exactPhoneIndex !== -1) return exactPhoneIndex;
+
+    return normalizedHeaders.findIndex((value) =>
+      /(phone|mobile|telephone|tel|cell|whatsapp|msisdn|contact)/.test(value)
+    );
   }
 
-  const headerRow = rows[headerIndex] ?? [];
-  const headers = headerRow.map((cell, index) => {
-    const value = sanitizeCell(cell);
-    return value || `column_${index + 1}`;
-  });
+  if (kind === "range") {
+    const exactRangeIndex = normalizedHeaders.findIndex((value) => RANGE_HEADER_EXACT.includes(value));
+    if (exactRangeIndex !== -1) return exactRangeIndex;
 
-  return rows
-    .slice(headerIndex + 1)
-    .filter((row) => !isRowEmpty(row))
-    .map((row) => {
-      const record: Record<string, unknown> = {};
-      headers.forEach((header, index) => {
-        record[header] = row[index] ?? "";
-      });
-      return record;
-    });
+    return normalizedHeaders.findIndex((value) => /(range|prefix|series|batch)/.test(value));
+  }
+
+  const exactCountryIndex = normalizedHeaders.findIndex((value) => COUNTRY_HEADER_EXACT.includes(value));
+  if (exactCountryIndex !== -1) return exactCountryIndex;
+
+  return normalizedHeaders.findIndex((value) => /(country|nation)/.test(value));
 }
 
 function splitCountryFromRange(rangeValue: string | null): {
@@ -204,15 +153,8 @@ function splitCountryFromRange(rangeValue: string | null): {
 
   return {
     country: match[1]?.trim() || null,
-    range: `${match[1]?.trim() || ""} ${match[2]}`.trim()
+    range: normalized
   };
-}
-
-function extractFromPhoneCell(rawPhoneCell: unknown): string[] {
-  const direct = cleanPhone(rawPhoneCell);
-  if (direct) return [direct];
-
-  return extractPhoneCandidates(rawPhoneCell);
 }
 
 function pushEntries(
@@ -234,6 +176,73 @@ function pushEntries(
   }
 }
 
+function extractRowsDirectly(rows: string[][], sheetName: string | null): ExtractedEntry[] {
+  if (rows.length === 0) return [];
+
+  const headerIndex = detectHeaderRowIndex(rows);
+  const entries: ExtractedEntry[] = [];
+
+  if (headerIndex === -1) {
+    for (const row of rows) {
+      if (isRowEmpty(row)) continue;
+
+      for (const cell of row) {
+        const candidates = extractPhoneCandidates(cell);
+        pushEntries(entries, candidates, null, null, sheetName, null);
+      }
+    }
+
+    return entries;
+  }
+
+  const headers = rows[headerIndex] ?? [];
+  const dataRows = rows.slice(headerIndex + 1).filter((row) => !isRowEmpty(row));
+
+  const phoneIndex = findColumnIndex(headers, "phone");
+  const rangeIndex = findColumnIndex(headers, "range");
+  const countryIndex = findColumnIndex(headers, "country");
+
+  for (const row of dataRows) {
+    const rawRangeValue = rangeIndex !== -1 ? sanitizeCell(row[rangeIndex]) || null : null;
+    const rawCountryValue = countryIndex !== -1 ? sanitizeCell(row[countryIndex]) || null : null;
+
+    const inferredFromRange = !rawCountryValue ? splitCountryFromRange(rawRangeValue) : null;
+    const rangeValue = inferredFromRange?.range ?? rawRangeValue;
+    const countryValue = rawCountryValue ?? inferredFromRange?.country ?? null;
+
+    if (phoneIndex !== -1) {
+      const phoneCell = row[phoneIndex] ?? "";
+      const direct = cleanPhone(phoneCell);
+      const candidates = direct ? [direct] : extractPhoneCandidates(phoneCell);
+
+      pushEntries(
+        entries,
+        candidates,
+        rangeValue,
+        countryValue,
+        sheetName,
+        headers[phoneIndex] ?? "number"
+      );
+
+      continue;
+    }
+
+    for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
+      if (colIndex === rangeIndex || colIndex === countryIndex) continue;
+
+      const headerName = headers[colIndex] ?? `column_${colIndex + 1}`;
+      const normalizedHeaderName = normalizeHeader(headerName);
+
+      if (/(country|nation|range|prefix|series|batch)/.test(normalizedHeaderName)) continue;
+
+      const candidates = extractPhoneCandidates(row[colIndex] ?? "");
+      pushEntries(entries, candidates, rangeValue, countryValue, sheetName, headerName);
+    }
+  }
+
+  return entries;
+}
+
 export function parseStructuredRows(
   rows: Record<string, unknown>[],
   sheetName: string | null = null
@@ -247,9 +256,19 @@ export function parseStructuredRows(
     }, new Set<string>())
   );
 
-  const phoneKey = findBestHeaderKey(keys, "phone");
-  const rangeKey = findBestHeaderKey(keys, "range");
-  const countryKey = findBestHeaderKey(keys, "country");
+  const phoneKey = keys.find((key) => normalizeHeader(key) === "number")
+    ?? keys.find((key) => PHONE_HEADER_EXACT.includes(normalizeHeader(key)))
+    ?? keys.find((key) => /(phone|mobile|telephone|tel|cell|whatsapp|msisdn|contact)/.test(normalizeHeader(key)))
+    ?? null;
+
+  const rangeKey = keys.find((key) => RANGE_HEADER_EXACT.includes(normalizeHeader(key)))
+    ?? keys.find((key) => /(range|prefix|series|batch)/.test(normalizeHeader(key)))
+    ?? null;
+
+  const countryKey = keys.find((key) => COUNTRY_HEADER_EXACT.includes(normalizeHeader(key)))
+    ?? keys.find((key) => /(country|nation)/.test(normalizeHeader(key)))
+    ?? null;
+
   const entries: ExtractedEntry[] = [];
 
   for (const row of rows) {
@@ -261,13 +280,11 @@ export function parseStructuredRows(
     const countryValue = rawCountryValue ?? inferredFromRange?.country ?? null;
 
     if (phoneKey) {
-      const rawPhoneCell = row[phoneKey];
-      const candidates = extractFromPhoneCell(rawPhoneCell);
-
-      if (candidates.length > 0) {
-        pushEntries(entries, candidates, rangeValue, countryValue, sheetName, phoneKey);
-        continue;
-      }
+      const phoneCell = row[phoneKey];
+      const direct = cleanPhone(phoneCell);
+      const candidates = direct ? [direct] : extractPhoneCandidates(phoneCell);
+      pushEntries(entries, candidates, rangeValue, countryValue, sheetName, phoneKey);
+      continue;
     }
 
     for (const [key, value] of Object.entries(row)) {
@@ -332,22 +349,22 @@ function buildResult(fileName: string, entries: ExtractedEntry[], sheets: string
 }
 
 function parseWorkbookSheet(sheet: XLSX.WorkSheet, sheetName: string): ExtractedEntry[] {
-  const matrix = XLSX.utils.sheet_to_json<(string | number | boolean | null)[]>(sheet, {
+  const rawRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
     header: 1,
-    raw: false,
+    raw: true,
     defval: "",
     blankrows: false
-  }).map((row) => row.map((cell) => normalizeMatrixCell(cell)));
+  });
 
-  const normalizedRows = normalizeRowToObjects(matrix);
-  return parseStructuredRows(normalizedRows, sheetName);
+  const matrix = normalizeMatrix(rawRows);
+  return extractRowsDirectly(matrix, sheetName);
 }
 
 function parseWorkbookFromArrayBuffer(fileName: string, buffer: ArrayBuffer): ParsedResult {
   const workbook = XLSX.read(buffer, {
     type: "array",
-    raw: false,
-    cellText: true,
+    raw: true,
+    cellText: false,
     cellDates: false
   });
 
@@ -364,8 +381,8 @@ function parseWorkbookFromArrayBuffer(fileName: string, buffer: ArrayBuffer): Pa
 function parseWorkbookFromText(fileName: string, text: string): ParsedResult {
   const workbook = XLSX.read(text, {
     type: "string",
-    raw: false,
-    cellText: true
+    raw: true,
+    cellText: false
   });
 
   const entries: ExtractedEntry[] = [];
@@ -412,11 +429,18 @@ function parseJsonNode(node: unknown, entries: ExtractedEntry[]) {
   if (node && typeof node === "object") {
     const objectNode = node as Record<string, unknown>;
     const keys = Object.keys(objectNode);
-    const phoneKey = findBestHeaderKey(keys, "phone");
-    const rangeKey = findBestHeaderKey(keys, "range");
-    const countryKey = findBestHeaderKey(keys, "country");
+    const hasStructuredKeys = keys.some((key) => {
+      const normalizedKey = normalizeHeader(key);
+      return (
+        normalizedKey === "number"
+        || PHONE_HEADER_EXACT.includes(normalizedKey)
+        || RANGE_HEADER_EXACT.includes(normalizedKey)
+        || COUNTRY_HEADER_EXACT.includes(normalizedKey)
+        || /(phone|mobile|telephone|tel|cell|whatsapp|msisdn|contact|range|prefix|series|batch|country|nation)/.test(normalizedKey)
+      );
+    });
 
-    if (phoneKey || rangeKey || countryKey) {
+    if (hasStructuredKeys) {
       entries.push(...parseStructuredRows([objectNode]));
       return;
     }
@@ -424,6 +448,7 @@ function parseJsonNode(node: unknown, entries: ExtractedEntry[]) {
     for (const value of Object.values(objectNode)) {
       parseJsonNode(value, entries);
     }
+
     return;
   }
 
