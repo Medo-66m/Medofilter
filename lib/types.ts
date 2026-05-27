@@ -5,6 +5,7 @@ export type RangeSummaryItem = {
 
 export type ExtractedEntry = {
   value: string;
+  outputLine: string;
   range: string | null;
   country: string | null;
   sourceSheet: string | null;
@@ -19,9 +20,11 @@ export type ParsedResult = {
   countriesCount: number;
   rangeSummary: RangeSummaryItem[];
   numbers: string[];
+  outputLines: string[];
   groupedByRange: Record<string, string[]>;
   countries: string[];
   sheets: string[];
+  outputMode: "numbers" | "pairs";
 };
 
 export type StatusTone = "idle" | "info" | "success" | "error";
