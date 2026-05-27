@@ -24,7 +24,8 @@ export type ParsedResult = {
   groupedByRange: Record<string, string[]>;
   countries: string[];
   sheets: string[];
-  outputMode: "numbers" | "pairs";
+  outputMode: "numbers" | "pairs" | "accounts";
+  summaryLabel: string;
 };
 
 export type StatusTone = "idle" | "info" | "success" | "error";
