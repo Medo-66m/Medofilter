@@ -106,6 +106,70 @@ function pushEntries(
   }
 }
 
+function scoreHeaderRow(row: unknown[]): number {
+  const normalizedCells = row.map((cell) => normalizeHeader(String(cell ?? ""))).filter(Boolean);
+  if (normalizedCells.length === 0) return 0;
+
+  let score = 0;
+
+  for (const cell of normalizedCells) {
+    if (cell === "number") score += 10;
+    if (PHONE_HEADER_EXACT.includes(cell)) score += 8;
+    if (RANGE_HEADER_EXACT.includes(cell)) score += 4;
+    if (COUNTRY_HEADER_EXACT.includes(cell)) score += 4;
+    if (/(phone|mobile|telephone|tel|cell|whatsapp|msisdn|contact)/.test(cell)) score += 6;
+    if (/(range|prefix|series|batch)/.test(cell)) score += 3;
+    if (/(country|nation)/.test(cell)) score += 3;
+  }
+
+  return score;
+}
+
+function normalizeRowToObjects(rows: unknown[][]): Record<string, unknown>[] {
+  if (rows.length === 0) return [];
+
+  let bestHeaderIndex = -1;
+  let bestScore = 0;
+
+  for (let index = 0; index < Math.min(rows.length, 25); index += 1) {
+    const score = scoreHeaderRow(rows[index] ?? []);
+    if (score > bestScore) {
+      bestScore = score;
+      bestHeaderIndex = index;
+    }
+  }
+
+  if (bestHeaderIndex === -1 || bestScore === 0) {
+    return rows
+      .filter((row) => row.some((cell) => String(cell ?? "").trim() !== ""))
+      .map((row, rowIndex) => {
+        const record: Record<string, unknown> = {};
+        row.forEach((value, columnIndex) => {
+          record[`column_${rowIndex}_${columnIndex}`] = value;
+        });
+        return record;
+      });
+  }
+
+  const headerRow = rows[bestHeaderIndex] ?? [];
+  const headers = headerRow.map((cell, index) => {
+    const value = sanitizeCell(cell);
+    return value || `column_${index + 1}`;
+  });
+
+  const dataRows = rows.slice(bestHeaderIndex + 1);
+
+  return dataRows
+    .filter((row) => row.some((cell) => String(cell ?? "").trim() !== ""))
+    .map((row) => {
+      const record: Record<string, unknown> = {};
+      headers.forEach((header, index) => {
+        record[header] = row[index] ?? "";
+      });
+      return record;
+    });
+}
+
 export function parseStructuredRows(
   rows: Record<string, unknown>[],
   sheetName: string | null = null
@@ -196,6 +260,17 @@ function buildResult(fileName: string, entries: ExtractedEntry[], sheets: string
   };
 }
 
+function parseWorkbookSheet(sheet: XLSX.WorkSheet, sheetName: string): ExtractedEntry[] {
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+    header: 1,
+    raw: false,
+    defval: ""
+  });
+
+  const normalizedRows = normalizeRowToObjects(matrix);
+  return parseStructuredRows(normalizedRows, sheetName);
+}
+
 function parseWorkbookFromArrayBuffer(fileName: string, buffer: ArrayBuffer): ParsedResult {
   const workbook = XLSX.read(buffer, {
     type: "array",
@@ -208,12 +283,7 @@ function parseWorkbookFromArrayBuffer(fileName: string, buffer: ArrayBuffer): Pa
 
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-      defval: "",
-      raw: false
-    });
-
-    entries.push(...parseStructuredRows(rows, sheetName));
+    entries.push(...parseWorkbookSheet(sheet, sheetName));
   }
 
   return buildResult(fileName, entries, workbook.SheetNames);
@@ -230,12 +300,7 @@ function parseWorkbookFromText(fileName: string, text: string): ParsedResult {
 
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-      defval: "",
-      raw: false
-    });
-
-    entries.push(...parseStructuredRows(rows, sheetName));
+    entries.push(...parseWorkbookSheet(sheet, sheetName));
   }
 
   return buildResult(fileName, entries, workbook.SheetNames);
@@ -346,11 +411,11 @@ export function ensureDisplayNumbers(numbers: string[], addPlus: boolean): strin
 }
 
 export function validateParsedResult(result: ParsedResult): ParsedResult {
-  const cleanedNumbers = result.numbers
-    .map((value) => cleanPhone(value))
-    .filter((value): value is string => Boolean(value));
-
-  const deduped = dedupePreserveOrder(cleanedNumbers);
+  const deduped = dedupePreserveOrder(
+    result.numbers
+      .map((value) => cleanPhone(value))
+      .filter((value): value is string => Boolean(value))
+  );
 
   return {
     ...result,
