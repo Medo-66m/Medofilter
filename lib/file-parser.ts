@@ -35,7 +35,6 @@ const PHONE_HEADER_EXACT = [
 
 const RANGE_HEADER_EXACT = ["range", "prefix", "series", "batch"];
 const COUNTRY_HEADER_EXACT = ["country", "country name", "nation"];
-
 const HEADER_SCAN_LIMIT = 100;
 
 function getExtension(fileName: string): string {
@@ -52,6 +51,42 @@ function sanitizeCell(raw: unknown): string {
 
 function isRowEmpty(row: unknown[]): boolean {
   return !row.some((cell) => sanitizeCell(cell) !== "");
+}
+
+function getCellDisplayValue(sheet: XLSX.WorkSheet, address: string): string {
+  const cell = sheet[address];
+  if (!cell) return "";
+
+  if (cell.w !== undefined && cell.w !== null) {
+    return sanitizeCell(cell.w);
+  }
+
+  if (cell.v !== undefined && cell.v !== null) {
+    return sanitizeCell(cell.v);
+  }
+
+  return "";
+}
+
+function sheetToMatrix(sheet: XLSX.WorkSheet): string[][] {
+  const ref = sheet["!ref"];
+  if (!ref) return [];
+
+  const range = XLSX.utils.decode_range(ref);
+  const rows: string[][] = [];
+
+  for (let rowIndex = range.s.r; rowIndex <= range.e.r; rowIndex += 1) {
+    const row: string[] = [];
+
+    for (let colIndex = range.s.c; colIndex <= range.e.c; colIndex += 1) {
+      const address = XLSX.utils.encode_cell({ r: rowIndex, c: colIndex });
+      row.push(getCellDisplayValue(sheet, address));
+    }
+
+    rows.push(row);
+  }
+
+  return rows;
 }
 
 function findBestHeaderKey(keys: string[], kind: "phone" | "range" | "country"): string | null {
@@ -96,33 +131,29 @@ function findBestHeaderKey(keys: string[], kind: "phone" | "range" | "country"):
   return null;
 }
 
-function scoreHeaderRow(row: unknown[]): number {
-  const normalizedCells = row.map((cell) => normalizeHeader(String(cell ?? ""))).filter(Boolean);
+function scoreHeaderRow(row: string[]): number {
+  const normalizedCells = row.map((cell) => normalizeHeader(cell)).filter(Boolean);
   if (normalizedCells.length === 0) return 0;
 
   let score = 0;
 
   for (const cell of normalizedCells) {
-    if (cell === "number") score += 15;
-    if (PHONE_HEADER_EXACT.includes(cell)) score += 10;
-    if (RANGE_HEADER_EXACT.includes(cell)) score += 6;
-    if (COUNTRY_HEADER_EXACT.includes(cell)) score += 6;
-    if (/(phone|mobile|telephone|tel|cell|whatsapp|msisdn|contact)/.test(cell)) score += 8;
-    if (/(range|prefix|series|batch)/.test(cell)) score += 4;
-    if (/(country|nation)/.test(cell)) score += 4;
+    if (cell === "number") score += 20;
+    if (PHONE_HEADER_EXACT.includes(cell)) score += 12;
+    if (RANGE_HEADER_EXACT.includes(cell)) score += 8;
+    if (COUNTRY_HEADER_EXACT.includes(cell)) score += 8;
+    if (/(phone|mobile|telephone|tel|cell|whatsapp|msisdn|contact)/.test(cell)) score += 10;
+    if (/(range|prefix|series|batch)/.test(cell)) score += 6;
+    if (/(country|nation)/.test(cell)) score += 6;
   }
 
-  if (
-    normalizedCells.includes("number") &&
-    (normalizedCells.includes("range") || normalizedCells.includes("prefix"))
-  ) {
-    score += 10;
-  }
+  if (normalizedCells.includes("number")) score += 25;
+  if (normalizedCells.includes("range") && normalizedCells.includes("number")) score += 20;
 
   return score;
 }
 
-function detectHeaderRowIndex(rows: unknown[][]): number {
+function detectHeaderRowIndex(rows: string[][]): number {
   const limit = Math.min(rows.length, HEADER_SCAN_LIMIT);
   let bestIndex = -1;
   let bestScore = 0;
@@ -140,7 +171,7 @@ function detectHeaderRowIndex(rows: unknown[][]): number {
   return bestScore > 0 ? bestIndex : -1;
 }
 
-function normalizeRowToObjects(rows: unknown[][]): Record<string, unknown>[] {
+function normalizeRowToObjects(rows: string[][]): Record<string, unknown>[] {
   if (rows.length === 0) return [];
 
   const headerIndex = detectHeaderRowIndex(rows);
@@ -208,6 +239,13 @@ function splitCountryFromRange(rangeValue: string | null): {
   };
 }
 
+function extractFromPhoneCell(rawPhoneCell: unknown): string[] {
+  const direct = cleanPhone(rawPhoneCell);
+  if (direct) return [direct];
+
+  return extractPhoneCandidates(rawPhoneCell);
+}
+
 function pushEntries(
   destination: ExtractedEntry[],
   candidates: string[],
@@ -250,13 +288,12 @@ export function parseStructuredRows(
     const rawCountryValue = countryKey ? sanitizeCell(row[countryKey]) || null : null;
 
     const inferredFromRange = !rawCountryValue ? splitCountryFromRange(rawRangeValue) : null;
-
     const rangeValue = inferredFromRange?.range ?? rawRangeValue;
     const countryValue = rawCountryValue ?? inferredFromRange?.country ?? null;
 
     if (phoneKey) {
       const rawPhoneCell = row[phoneKey];
-      const candidates = extractPhoneCandidates(rawPhoneCell);
+      const candidates = extractFromPhoneCell(rawPhoneCell);
       pushEntries(entries, candidates, rangeValue, countryValue, sheetName, phoneKey);
       continue;
     }
@@ -323,12 +360,7 @@ function buildResult(fileName: string, entries: ExtractedEntry[], sheets: string
 }
 
 function parseWorkbookSheet(sheet: XLSX.WorkSheet, sheetName: string): ExtractedEntry[] {
-  const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
-    header: 1,
-    raw: false,
-    defval: ""
-  });
-
+  const matrix = sheetToMatrix(sheet);
   const normalizedRows = normalizeRowToObjects(matrix);
   return parseStructuredRows(normalizedRows, sheetName);
 }
@@ -336,9 +368,9 @@ function parseWorkbookSheet(sheet: XLSX.WorkSheet, sheetName: string): Extracted
 function parseWorkbookFromArrayBuffer(fileName: string, buffer: ArrayBuffer): ParsedResult {
   const workbook = XLSX.read(buffer, {
     type: "array",
-    raw: false,
-    cellText: true,
-    cellDates: false
+    cellDates: false,
+    raw: true,
+    dense: false
   });
 
   const entries: ExtractedEntry[] = [];
@@ -354,8 +386,8 @@ function parseWorkbookFromArrayBuffer(fileName: string, buffer: ArrayBuffer): Pa
 function parseWorkbookFromText(fileName: string, text: string): ParsedResult {
   const workbook = XLSX.read(text, {
     type: "string",
-    raw: false,
-    cellText: true
+    raw: true,
+    dense: false
   });
 
   const entries: ExtractedEntry[] = [];
