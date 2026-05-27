@@ -15,8 +15,9 @@ import {
   XCircle
 } from "lucide-react";
 import { downloadNumbersTxt, downloadRangesZip } from "@/lib/download";
+import { nextFileDownloadName } from "@/lib/counters";
 import { parseFile, validateParsedResult } from "@/lib/file-parser";
-import { withOptionalPlus } from "@/lib/phone";
+import { safeFilePart, withOptionalPlus } from "@/lib/phone";
 import type { ParsedResult, StatusTone } from "@/lib/types";
 
 type StatusState = {
@@ -56,12 +57,10 @@ function StatusBanner({ status }: { status: StatusState }) {
 
 function StatCard({
   label,
-  value,
-  hint
+  value
 }: {
   label: string;
   value: string | number;
-  hint?: string;
 }) {
   return (
     <div className="glass rounded-[1.35rem] p-4 transition duration-300 ease-smooth hover:-translate-y-0.5 hover:shadow-soft">
@@ -69,7 +68,6 @@ function StatCard({
       <div className="mt-2 break-words text-2xl font-semibold tracking-tight text-white">
         {value}
       </div>
-      {hint ? <div className="mt-1 text-xs text-slate-500">{hint}</div> : null}
     </div>
   );
 }
@@ -122,6 +120,20 @@ function ActionButton({
       {children}
     </button>
   );
+}
+
+function downloadSingleRangeTxt(range: string, numbers: string[], addPlus: boolean) {
+  const fileName = `${safeFilePart(range)}-${nextFileDownloadName()}`;
+  const content = numbers.map((value) => withOptionalPlus(value, addPlus)).join("\n");
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
 
 export default function MedoFilterApp() {
@@ -252,6 +264,32 @@ export default function MedoFilterApp() {
     }
   }
 
+  async function onDownloadSingleRange(range: string) {
+    if (!result) return;
+
+    const numbers = result.groupedByRange[range] ?? [];
+    if (numbers.length === 0) {
+      setStatus({
+        tone: "error",
+        message: "هذا الـ Range لا يحتوي على أرقام قابلة للتنزيل."
+      });
+      return;
+    }
+
+    try {
+      downloadSingleRangeTxt(range, numbers, addPlus);
+      setStatus({
+        tone: "success",
+        message: `تم تنزيل ${numbers.length} رقمًا من ${range}.`
+      });
+    } catch {
+      setStatus({
+        tone: "error",
+        message: "فشل تنزيل ملف الـ Range."
+      });
+    }
+  }
+
   return (
     <main className="min-h-screen">
       <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
@@ -265,11 +303,11 @@ export default function MedoFilterApp() {
                 </div>
 
                 <h1 className="m-0 text-3xl font-semibold tracking-tight text-white sm:text-4xl lg:text-5xl">
-                  Clean phone numbers.
+                  Clean phone numbers
                 </h1>
 
                 <p className="mt-3 max-w-xl text-sm leading-7 text-slate-400 sm:text-base">
-                  Extract, clean, dedupe, copy, and download.
+                  Extract, clean, dedupe, copy, download.
                 </p>
               </div>
 
@@ -372,11 +410,7 @@ export default function MedoFilterApp() {
             </div>
 
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-              <StatCard
-                label="File"
-                value={result?.fileName ?? "—"}
-                hint={result ? "Ready" : "Waiting"}
-              />
+              <StatCard label="File" value={result?.fileName ?? "—"} />
               <StatCard label="Before" value={result?.originalCount ?? 0} />
               <StatCard label="After" value={result?.cleanedCount ?? 0} />
               <StatCard label="Ranges" value={result?.rangesCount ?? 0} />
@@ -427,16 +461,33 @@ export default function MedoFilterApp() {
                 right={loading ? <LoaderCircle className="h-5 w-5 animate-spin text-cyan-300" /> : null}
               />
 
-              <div className="max-h-[320px] space-y-3 overflow-auto scrollbar-thin pr-1">
+              <div className="max-h-[360px] space-y-3 overflow-auto scrollbar-thin pr-1">
                 {result?.rangeSummary.length ? (
                   result.rangeSummary.map((item) => (
                     <div
                       key={item.range}
-                      className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 transition duration-200 hover:bg-white/[0.045]"
+                      className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 transition duration-200 hover:bg-white/[0.045]"
                     >
-                      <div className="truncate text-sm text-slate-200">{item.range}</div>
-                      <div className="rounded-full bg-violet-500/15 px-3 py-1 text-xs text-violet-200">
-                        {item.count}
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-slate-200">{item.range}</div>
+                          <div className="mt-1 text-xs text-slate-500">{item.count} numbers</div>
+                        </div>
+
+                        <div className="flex shrink-0 items-center gap-2">
+                          <div className="rounded-full bg-violet-500/15 px-3 py-1 text-xs text-violet-200">
+                            {item.count}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => void onDownloadSingleRange(item.range)}
+                            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white transition duration-200 hover:bg-white/10"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            TXT
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))
