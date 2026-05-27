@@ -2,7 +2,6 @@
 
 import { useMemo, useRef, useState } from "react";
 import {
-  Bug,
   CheckCircle2,
   Clipboard,
   Download,
@@ -25,34 +24,17 @@ type StatusState = {
   message: string;
 };
 
-type DebugState = {
-  fileName: string;
-  extension: string;
-  parseStartedAt: string;
-  parseFinishedAt: string | null;
-  error: string | null;
-  resultSnapshot: {
-    originalCount: number;
-    cleanedCount: number;
-    rangesCount: number;
-    countriesCount: number;
-    sheets: string[];
-    firstNumbers: string[];
-    firstRanges: Array<{ range: string; count: number }>;
-  } | null;
-};
-
 const ACCEPTED_FILES = ".xlsx,.csv,.txt,.log,.json,.html,.xml";
 const PREVIEW_LIMIT = 20;
 
 function StatusBanner({ status }: { status: StatusState }) {
   const styles =
     status.tone === "error"
-      ? "border-red-500/30 bg-red-500/10 text-red-200"
+      ? "border-red-500/25 bg-red-500/10 text-red-200"
       : status.tone === "success"
-        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+        ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-200"
         : status.tone === "info"
-          ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
+          ? "border-cyan-500/25 bg-cyan-500/10 text-cyan-100"
           : "border-white/10 bg-white/[0.03] text-slate-300";
 
   const Icon =
@@ -82,16 +64,34 @@ function StatCard({
   hint?: string;
 }) {
   return (
-    <div className="glass rounded-[1.4rem] p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-accent">
-      <div className="text-sm text-muted">{label}</div>
-      <div className="mt-2 text-2xl font-semibold tracking-tight text-text break-words">{value}</div>
-      {hint ? <div className="mt-1 text-xs text-slate-400">{hint}</div> : null}
+    <div className="glass rounded-[1.35rem] p-4 transition duration-200 hover:-translate-y-0.5">
+      <div className="text-xs text-slate-400">{label}</div>
+      <div className="mt-2 break-words text-2xl font-semibold tracking-tight text-white">
+        {value}
+      </div>
+      {hint ? <div className="mt-1 text-xs text-slate-500">{hint}</div> : null}
     </div>
   );
 }
 
-function createInitialDebug(): DebugState | null {
-  return null;
+function SectionTitle({
+  title,
+  subtitle,
+  right
+}: {
+  title: string;
+  subtitle?: string;
+  right?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-4 flex items-center justify-between gap-4">
+      <div>
+        <h2 className="m-0 text-lg font-semibold text-white sm:text-xl">{title}</h2>
+        {subtitle ? <p className="mt-1 text-sm text-slate-400">{subtitle}</p> : null}
+      </div>
+      {right}
+    </div>
+  );
 }
 
 export default function MedoFilterApp() {
@@ -100,9 +100,8 @@ export default function MedoFilterApp() {
   const [result, setResult] = useState<ParsedResult | null>(null);
   const [status, setStatus] = useState<StatusState>({
     tone: "idle",
-    message: "ارفع الملف، وسأعالج كل الأرقام كاملة وأعرض لك أول 20 رقم فقط."
+    message: "ارفع الملف وابدأ."
   });
-  const [debugInfo, setDebugInfo] = useState<DebugState | null>(createInitialDebug());
   const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [addPlus, setAddPlus] = useState(false);
@@ -113,88 +112,39 @@ export default function MedoFilterApp() {
     return result.numbers.map((value) => withOptionalPlus(value, addPlus));
   }, [result, addPlus]);
 
-  const previewNumbers = useMemo(() => {
-    return displayNumbers.slice(0, PREVIEW_LIMIT);
-  }, [displayNumbers]);
-
+  const previewNumbers = useMemo(() => displayNumbers.slice(0, PREVIEW_LIMIT), [displayNumbers]);
   const hiddenCount = Math.max(displayNumbers.length - previewNumbers.length, 0);
 
   async function handleSelectedFile(file: File) {
     setLoading(true);
     setCopyDone(false);
 
-    const startedAt = new Date().toISOString();
-    const extension = file.name.toLowerCase().split(".").pop() ?? "";
-
-    setDebugInfo({
-      fileName: file.name,
-      extension,
-      parseStartedAt: startedAt,
-      parseFinishedAt: null,
-      error: null,
-      resultSnapshot: null
-    });
-
     setStatus({
       tone: "info",
-      message: `جاري قراءة الملف ${file.name} وتحليل الأرقام...`
+      message: `جاري تحليل ${file.name}...`
     });
 
     try {
       const parsed = validateParsedResult(await parseFile(file));
-
-      const finishedAt = new Date().toISOString();
-
-      setDebugInfo({
-        fileName: file.name,
-        extension,
-        parseStartedAt: startedAt,
-        parseFinishedAt: finishedAt,
-        error: null,
-        resultSnapshot: {
-          originalCount: parsed.originalCount,
-          cleanedCount: parsed.cleanedCount,
-          rangesCount: parsed.rangesCount,
-          countriesCount: parsed.countriesCount,
-          sheets: parsed.sheets,
-          firstNumbers: parsed.numbers.slice(0, 20),
-          firstRanges: parsed.rangeSummary.slice(0, 20)
-        }
-      });
-
       setResult(parsed);
 
       if (parsed.cleanedCount === 0) {
         setStatus({
           tone: "error",
-          message:
-            "لم أجد أرقامًا صالحة بطول من 10 إلى 15 رقمًا داخل الملف. تأكد من البيانات أو جرّب ملفًا آخر."
+          message: "لم أجد أرقامًا صالحة داخل الملف."
         });
       } else {
-        const previewHint =
-          parsed.cleanedCount > PREVIEW_LIMIT
-            ? `أعرض لك أول ${PREVIEW_LIMIT} رقم فقط داخل الصفحة، لكن النسخ والتحميل يشملان كل الأرقام بالكامل.`
-            : "تم التحليل بنجاح.";
-
         setStatus({
           tone: "success",
-          message: `تم التحليل بنجاح. وجدت ${parsed.originalCount} رقمًا قبل إزالة التكرار، والنتيجة النهائية ${parsed.cleanedCount} رقمًا. ${previewHint}`
+          message:
+            parsed.cleanedCount > PREVIEW_LIMIT
+              ? `تم العثور على ${parsed.cleanedCount} رقمًا. المعروض أول ${PREVIEW_LIMIT} فقط.`
+              : `تم العثور على ${parsed.cleanedCount} رقمًا.`
         });
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "حدث خطأ غير متوقع أثناء قراءة الملف.";
-      const finishedAt = new Date().toISOString();
-
+      const message = error instanceof Error ? error.message : "حدث خطأ أثناء قراءة الملف.";
       setResult(null);
-      setDebugInfo({
-        fileName: file.name,
-        extension,
-        parseStartedAt: startedAt,
-        parseFinishedAt: finishedAt,
-        error: message,
-        resultSnapshot: null
-      });
-
       setStatus({
         tone: "error",
         message
@@ -227,13 +177,13 @@ export default function MedoFilterApp() {
       setCopyDone(true);
       setStatus({
         tone: "success",
-        message: `تم نسخ ${displayNumbers.length} رقمًا كاملًا إلى الحافظة.`
+        message: `تم نسخ ${displayNumbers.length} رقمًا.`
       });
       window.setTimeout(() => setCopyDone(false), 1800);
     } catch {
       setStatus({
         tone: "error",
-        message: "تعذر النسخ تلقائيًا من المتصفح. جرّب مرة ثانية أو استخدم التحميل."
+        message: "تعذر النسخ."
       });
     }
   }
@@ -245,12 +195,12 @@ export default function MedoFilterApp() {
       downloadNumbersTxt(result.numbers, addPlus);
       setStatus({
         tone: "success",
-        message: `تم تنزيل ملف TXT يحتوي على ${result.numbers.length} رقمًا كاملًا.`
+        message: `تم تنزيل ${result.numbers.length} رقمًا.`
       });
     } catch {
       setStatus({
         tone: "error",
-        message: "حدثت مشكلة أثناء إنشاء ملف TXT."
+        message: "فشل إنشاء ملف TXT."
       });
     }
   }
@@ -262,12 +212,12 @@ export default function MedoFilterApp() {
       await downloadRangesZip(result.groupedByRange, addPlus);
       setStatus({
         tone: "success",
-        message: "تم إنشاء ملف ZIP للـ ranges وتنزيله."
+        message: "تم تنزيل ZIP."
       });
     } catch (error) {
       setStatus({
         tone: "error",
-        message: error instanceof Error ? error.message : "تعذر إنشاء ملف ZIP."
+        message: error instanceof Error ? error.message : "فشل إنشاء ZIP."
       });
     }
   }
@@ -284,31 +234,26 @@ export default function MedoFilterApp() {
                   Medo Filter
                 </div>
 
-                <h1 className="m-0 text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl">
-                  فلترة قوية للأرقام
-                  <span className="bg-gradient-to-l from-cyan-300 to-violet-300 bg-clip-text text-transparent">
-                    {" "}
-                    بدون ما تثقل الصفحة
-                  </span>
+                <h1 className="m-0 text-3xl font-semibold tracking-tight text-white sm:text-4xl lg:text-5xl">
+                  Filter numbers
                 </h1>
 
-                <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300 sm:text-base">
-                  ارفع الملف، وسيتم استخراج الأرقام وتنظيفها وحذف التكرار. الموقع يعالج كل
-                  الأرقام كاملة، لكنه يعرض أول 20 رقم فقط داخل الصفحة حتى يظل سريعًا ومريحًا.
+                <p className="mt-3 text-sm leading-7 text-slate-400 sm:text-base">
+                  رفع، تنظيف، حذف التكرار، تنزيل.
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:w-[460px]">
-                <StatCard label="الصيغ" value="7" hint="xlsx, csv, txt..." />
-                <StatCard label="المدى المقبول" value="10–15" hint="أرقام فقط" />
-                <StatCard label="الناتج" value="TXT / ZIP" hint="نسخ وتنزيل" />
-                <StatCard label="المعاينة" value="20" hint="فقط داخل الصفحة" />
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:w-[430px]">
+                <StatCard label="الصيغ" value="7" />
+                <StatCard label="الحد" value="10–15" />
+                <StatCard label="المعاينة" value="20" />
+                <StatCard label="الناتج" value="TXT / ZIP" />
               </div>
             </div>
           </div>
         </header>
 
-        <div className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-[1.02fr_0.98fr]">
           <section className="space-y-6">
             <div
               onDragOver={(event) => {
@@ -329,9 +274,9 @@ export default function MedoFilterApp() {
                     <FileSpreadsheet className="h-5 w-5 text-violet-300" />
                   </div>
                   <div>
-                    <div className="text-lg font-semibold">ارفع الملف أو اسحبه هنا</div>
+                    <div className="text-lg font-semibold text-white">ارفع الملف</div>
                     <div className="text-sm text-slate-400">
-                      التحليل يبدأ تلقائيًا، والتحميل والنسخ يشملان كل الأرقام كاملة.
+                      Excel, CSV, TXT, JSON, HTML, XML
                     </div>
                   </div>
                 </div>
@@ -347,8 +292,8 @@ export default function MedoFilterApp() {
                     <UploadCloud className="h-8 w-8 text-cyan-300" />
                   </div>
 
-                  <div className="text-lg font-medium">اختر ملفك الآن</div>
-                  <div className="mt-2 text-sm leading-7 text-slate-400">
+                  <div className="text-lg font-medium text-white">اسحب الملف هنا أو اختره</div>
+                  <div className="mt-2 text-sm text-slate-400">
                     xlsx / csv / txt / log / json / html / xml
                   </div>
 
@@ -362,7 +307,7 @@ export default function MedoFilterApp() {
                     </button>
 
                     <label className="flex cursor-pointer items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm text-slate-200 transition hover:bg-white/8">
-                      <span>إضافة + قبل كل رقم</span>
+                      <span>إضافة +</span>
                       <button
                         type="button"
                         onClick={() => setAddPlus((prev) => !prev)}
@@ -398,89 +343,61 @@ export default function MedoFilterApp() {
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
               <StatCard
                 label="الملف"
-                value={result?.fileName ?? debugInfo?.fileName ?? "—"}
-                hint={result || debugInfo ? "تمت قراءته" : "بانتظار الرفع"}
+                value={result?.fileName ?? "—"}
+                hint={result ? "تمت القراءة" : "بانتظار الملف"}
               />
-              <StatCard
-                label="قبل حذف التكرار"
-                value={result?.originalCount ?? debugInfo?.resultSnapshot?.originalCount ?? 0}
-                hint="بعد التنظيف الأولي"
-              />
-              <StatCard
-                label="بعد التنظيف والحذف"
-                value={result?.cleanedCount ?? debugInfo?.resultSnapshot?.cleanedCount ?? 0}
-                hint="النتيجة النهائية"
-              />
-              <StatCard
-                label="عدد الـ Ranges"
-                value={result?.rangesCount ?? debugInfo?.resultSnapshot?.rangesCount ?? 0}
-                hint="من البيانات المتاحة"
-              />
-              <StatCard
-                label="عدد الدول"
-                value={result?.countriesCount ?? debugInfo?.resultSnapshot?.countriesCount ?? 0}
-                hint="إن كانت موجودة"
-              />
+              <StatCard label="قبل الحذف" value={result?.originalCount ?? 0} />
+              <StatCard label="بعد الحذف" value={result?.cleanedCount ?? 0} />
+              <StatCard label="الـ Ranges" value={result?.rangesCount ?? 0} />
+              <StatCard label="الدول" value={result?.countriesCount ?? 0} />
               <StatCard
                 label="المعروض"
                 value={result ? `${previewNumbers.length}/${displayNumbers.length}` : "0/0"}
-                hint="داخل الصفحة فقط"
               />
             </div>
 
             <div className="glass rounded-[1.75rem] p-5 sm:p-6">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="m-0 text-xl font-semibold">الأوامر السريعة</h2>
-                  <p className="mt-2 text-sm text-slate-400">
-                    النسخ والتحميل يعملان على كل الأرقام، وليس فقط المعروض.
-                  </p>
-                </div>
+              <SectionTitle title="الأدوات" subtitle="النسخ والتحميل يشملان كل الأرقام." />
 
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    disabled={!result?.numbers.length || loading}
-                    onClick={onCopy}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    <Clipboard className="h-4 w-4" />
-                    {copyDone ? "تم النسخ" : "نسخ كل الأرقام"}
-                  </button>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  disabled={!result?.numbers.length || loading}
+                  onClick={onCopy}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <Clipboard className="h-4 w-4" />
+                  {copyDone ? "تم النسخ" : "نسخ"}
+                </button>
 
-                  <button
-                    type="button"
-                    disabled={!result?.numbers.length || loading}
-                    onClick={onDownloadAll}
-                    className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-l from-violet-500 to-fuchsia-500 px-4 py-3 text-sm font-medium transition hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    <Download className="h-4 w-4" />
-                    تحميل TXT واحد
-                  </button>
+                <button
+                  type="button"
+                  disabled={!result?.numbers.length || loading}
+                  onClick={onDownloadAll}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-l from-violet-500 to-fuchsia-500 px-4 py-3 text-sm font-medium text-white transition hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <Download className="h-4 w-4" />
+                  TXT
+                </button>
 
-                  <button
-                    type="button"
-                    disabled={!result || result.rangesCount === 0 || loading}
-                    onClick={onDownloadRanges}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    <FileArchive className="h-4 w-4" />
-                    تحميل حسب Range
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  disabled={!result || result.rangesCount === 0 || loading}
+                  onClick={onDownloadRanges}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <FileArchive className="h-4 w-4" />
+                  ZIP
+                </button>
               </div>
             </div>
 
             <div className="glass rounded-[1.75rem] p-5 sm:p-6">
-              <div className="mb-4 flex items-center justify-between gap-4">
-                <div>
-                  <h2 className="m-0 text-xl font-semibold">ملخص الـ Ranges</h2>
-                  <p className="mt-2 text-sm text-slate-400">
-                    كل Range مع عدد الأرقام الخاصة به بعد التنظيف وحذف التكرار.
-                  </p>
-                </div>
-                {loading ? <LoaderCircle className="h-5 w-5 animate-spin text-cyan-300" /> : null}
-              </div>
+              <SectionTitle
+                title="الـ Ranges"
+                subtitle="ملخص سريع"
+                right={loading ? <LoaderCircle className="h-5 w-5 animate-spin text-cyan-300" /> : null}
+              />
 
               <div className="max-h-[290px] space-y-3 overflow-auto scrollbar-thin pr-1">
                 {result?.rangeSummary.length ? (
@@ -497,82 +414,37 @@ export default function MedoFilterApp() {
                   ))
                 ) : (
                   <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-8 text-center text-sm text-slate-400">
-                    لا توجد ranges ظاهرة في الملف الحالي.
+                    لا توجد بيانات.
                   </div>
                 )}
-              </div>
-            </div>
-
-            <div className="glass rounded-[1.75rem] border border-amber-400/20 bg-amber-400/5 p-5 sm:p-6">
-              <div className="mb-4 flex items-center gap-3">
-                <div className="rounded-2xl bg-amber-400/10 p-3">
-                  <Bug className="h-5 w-5 text-amber-300" />
-                </div>
-                <div>
-                  <h2 className="m-0 text-xl font-semibold text-amber-100">Debug</h2>
-                  <p className="mt-1 text-sm text-amber-100/80">
-                    ابعت لي هذا القسم كما هو لو ما زالت المشكلة موجودة.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <div className="mb-2 text-sm font-medium text-slate-200">معلومات الملف</div>
-                  <pre className="m-0 whitespace-pre-wrap break-words text-xs leading-6 text-slate-300">
-{JSON.stringify(
-  debugInfo
-    ? {
-        fileName: debugInfo.fileName,
-        extension: debugInfo.extension,
-        parseStartedAt: debugInfo.parseStartedAt,
-        parseFinishedAt: debugInfo.parseFinishedAt,
-        error: debugInfo.error
-      }
-    : null,
-  null,
-  2
-)}
-                  </pre>
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <div className="mb-2 text-sm font-medium text-slate-200">ملخص النتيجة</div>
-                  <pre className="m-0 whitespace-pre-wrap break-words text-xs leading-6 text-slate-300">
-{JSON.stringify(debugInfo?.resultSnapshot ?? null, null, 2)}
-                  </pre>
-                </div>
               </div>
             </div>
           </section>
 
           <section className="space-y-6">
             <div className="glass rounded-[1.75rem] p-5 sm:p-6">
-              <div className="mb-4 flex items-center justify-between gap-4">
-                <div>
-                  <h2 className="m-0 text-xl font-semibold">معاينة أول 20 رقم</h2>
-                  <p className="mt-2 text-sm text-slate-400">
-                    هذه مجرد معاينة سريعة. الملف النهائي والنسخ يحتويان على كل الأرقام.
-                  </p>
-                </div>
-                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
-                  <Eye className="h-4 w-4" />
-                  Preview
-                </div>
-              </div>
+              <SectionTitle
+                title="المعاينة"
+                subtitle="أول 20 رقم فقط"
+                right={
+                  <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
+                    <Eye className="h-4 w-4" />
+                    Preview
+                  </div>
+                }
+              />
 
               {result && hiddenCount > 0 ? (
                 <div className="mb-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100">
-                  المعروض الآن أول {previewNumbers.length} رقم فقط، ويوجد {hiddenCount} رقم
-                  إضافي محفوظين بالكامل للنسخ والتحميل.
+                  المعروض {previewNumbers.length} فقط، والباقي موجود في النسخ والتحميل.
                 </div>
               ) : null}
 
-              <div className="max-h-[520px] overflow-auto rounded-[1.25rem] border border-white/8 bg-[#050812] scrollbar-thin">
+              <div className="max-h-[640px] overflow-auto rounded-[1.25rem] border border-white/8 bg-[#050812] scrollbar-thin">
                 <pre className="m-0 whitespace-pre-wrap break-all p-4 text-sm leading-7 text-slate-200">
                   {previewNumbers.length
                     ? previewNumbers.join("\n")
-                    : "لا يوجد ناتج بعد. ارفع ملفًا للبدء."}
+                    : "لا يوجد ناتج بعد."}
                 </pre>
               </div>
             </div>
