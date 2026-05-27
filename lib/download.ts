@@ -1,6 +1,6 @@
 import JSZip from "jszip";
 import { nextFileDownloadName, nextRangeZipName } from "@/lib/counters";
-import { safeFilePart, withOptionalPlus } from "@/lib/phone";
+import { formatOutputLine, safeFilePart } from "@/lib/phone";
 
 function triggerDownload(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
@@ -13,9 +13,9 @@ function triggerDownload(blob: Blob, fileName: string) {
   URL.revokeObjectURL(url);
 }
 
-export function downloadNumbersTxt(numbers: string[], addPlus: boolean) {
+export function downloadNumbersTxt(lines: string[], addPlus: boolean) {
   const fileName = nextFileDownloadName();
-  const content = numbers.map((value) => withOptionalPlus(value, addPlus)).join("\n");
+  const content = lines.map((line) => formatOutputLine(line, addPlus)).join("\n");
   triggerDownload(new Blob([content], { type: "text/plain;charset=utf-8" }), fileName);
 }
 
@@ -30,9 +30,9 @@ export async function downloadRangesZip(
 
   const zip = new JSZip();
 
-  for (const [range, numbers] of entries) {
+  for (const [range, lines] of entries) {
     const safeRange = safeFilePart(range);
-    const content = numbers.map((value) => withOptionalPlus(value, addPlus)).join("\n");
+    const content = lines.map((line) => formatOutputLine(line, addPlus)).join("\n");
     zip.file(`${safeRange}.txt`, content);
   }
 
