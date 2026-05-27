@@ -254,7 +254,7 @@ export default function MedoFilterApp() {
       await downloadRangesZip(result.groupedByRange, addPlus);
       setStatus({
         tone: "success",
-        message: "تم تنزيل ملف ranges."
+        message: result.outputMode === "accounts" ? "تم تنزيل المجموعات." : "تم تنزيل ملف ranges."
       });
     } catch (error) {
       setStatus({
@@ -271,7 +271,7 @@ export default function MedoFilterApp() {
     if (lines.length === 0) {
       setStatus({
         tone: "error",
-        message: "هذا الـ range لا يحتوي على بيانات."
+        message: "هذا القسم لا يحتوي على بيانات."
       });
       return;
     }
@@ -285,10 +285,28 @@ export default function MedoFilterApp() {
     } catch {
       setStatus({
         tone: "error",
-        message: "فشل تنزيل هذا الـ range."
+        message: "فشل تنزيل هذا القسم."
       });
     }
   }
+
+  const summaryTitle = result?.summaryLabel ?? "Ranges";
+  const summarySubtitle =
+    result?.outputMode === "accounts" ? "Grouped by account prefix" : "Quick summary";
+
+  const previewTitle =
+    result?.outputMode === "pairs"
+      ? "First 20 results"
+      : result?.outputMode === "accounts"
+        ? "First 20 accounts"
+        : "First 20 numbers";
+
+  const exportLabel =
+    result?.outputMode === "pairs"
+      ? "PAIR / ZIP"
+      : result?.outputMode === "accounts"
+        ? "ACCOUNTS / ZIP"
+        : "TXT / ZIP";
 
   return (
     <main className="min-h-screen">
@@ -315,7 +333,7 @@ export default function MedoFilterApp() {
                 <StatCard label="Formats" value="7" />
                 <StatCard label="Length" value="10–15" />
                 <StatCard label="Preview" value="20" />
-                <StatCard label="Export" value={result?.outputMode === "pairs" ? "PAIR / ZIP" : "TXT / ZIP"} />
+                <StatCard label="Export" value={exportLabel} />
               </div>
             </div>
           </div>
@@ -413,7 +431,7 @@ export default function MedoFilterApp() {
               <StatCard label="File" value={result?.fileName ?? "—"} />
               <StatCard label="Before" value={result?.originalCount ?? 0} />
               <StatCard label="After" value={result?.cleanedCount ?? 0} />
-              <StatCard label="Ranges" value={result?.rangesCount ?? 0} />
+              <StatCard label={summaryTitle} value={result?.rangesCount ?? 0} />
               <StatCard label="Countries" value={result?.countriesCount ?? 0} />
               <StatCard
                 label="Visible"
@@ -449,15 +467,15 @@ export default function MedoFilterApp() {
                   variant="cyan"
                 >
                   <FileArchive className="h-4 w-4" />
-                  Download ranges
+                  {result?.outputMode === "accounts" ? "Download groups" : "Download ranges"}
                 </ActionButton>
               </div>
             </div>
 
             <div className="glass rounded-[1.75rem] p-5 sm:p-6">
               <SectionTitle
-                title="Ranges"
-                subtitle="Quick summary"
+                title={summaryTitle}
+                subtitle={summarySubtitle}
                 right={loading ? <LoaderCircle className="h-5 w-5 animate-spin text-cyan-300" /> : null}
               />
 
@@ -471,7 +489,9 @@ export default function MedoFilterApp() {
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="min-w-0">
                           <div className="truncate text-sm font-medium text-slate-200">{item.range}</div>
-                          <div className="mt-1 text-xs text-slate-500">{item.count} lines</div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            {item.count} {result.outputMode === "accounts" ? "accounts" : "lines"}
+                          </div>
                         </div>
 
                         <div className="flex shrink-0 items-center gap-2">
@@ -504,7 +524,7 @@ export default function MedoFilterApp() {
             <div className="glass rounded-[1.75rem] p-5 sm:p-6">
               <SectionTitle
                 title="Preview"
-                subtitle={result?.outputMode === "pairs" ? "First 20 results" : "First 20 numbers"}
+                subtitle={previewTitle}
                 right={
                   <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
                     <Eye className="h-4 w-4" />
