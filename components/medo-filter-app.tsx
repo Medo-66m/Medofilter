@@ -64,8 +64,8 @@ function StatCard({
   hint?: string;
 }) {
   return (
-    <div className="glass rounded-[1.35rem] p-4 transition duration-200 hover:-translate-y-0.5">
-      <div className="text-xs text-slate-400">{label}</div>
+    <div className="glass rounded-[1.35rem] p-4 transition duration-300 ease-smooth hover:-translate-y-0.5 hover:shadow-soft">
+      <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</div>
       <div className="mt-2 break-words text-2xl font-semibold tracking-tight text-white">
         {value}
       </div>
@@ -91,6 +91,36 @@ function SectionTitle({
       </div>
       {right}
     </div>
+  );
+}
+
+function ActionButton({
+  onClick,
+  disabled,
+  children,
+  variant = "secondary"
+}: {
+  onClick: () => void | Promise<void>;
+  disabled: boolean;
+  children: React.ReactNode;
+  variant?: "primary" | "secondary" | "cyan";
+}) {
+  const styles =
+    variant === "primary"
+      ? "bg-gradient-to-l from-violet-500 to-fuchsia-500 text-white hover:scale-[1.01] active:scale-[0.99]"
+      : variant === "cyan"
+        ? "border border-cyan-400/20 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/15"
+        : "border border-white/10 bg-white/5 text-white hover:bg-white/10";
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm transition duration-200 disabled:cursor-not-allowed disabled:opacity-45 ${styles}`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -226,28 +256,28 @@ export default function MedoFilterApp() {
     <main className="min-h-screen">
       <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
         <header className="mb-6">
-          <div className="glass rounded-[1.75rem] bg-hero-grid p-5 sm:p-6 lg:p-8">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="glass overflow-hidden rounded-[1.9rem] bg-hero-grid p-5 sm:p-6 lg:p-8">
+            <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
               <div className="max-w-3xl">
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
+                <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] tracking-[0.2em] text-slate-300">
                   <MoonStar className="h-4 w-4 text-violet-300" />
-                  Medo Filter
+                  MEDO FILTER
                 </div>
 
                 <h1 className="m-0 text-3xl font-semibold tracking-tight text-white sm:text-4xl lg:text-5xl">
-                  Filter numbers
+                  Clean phone numbers.
                 </h1>
 
-                <p className="mt-3 text-sm leading-7 text-slate-400 sm:text-base">
-                  رفع، تنظيف، حذف التكرار، تنزيل.
+                <p className="mt-3 max-w-xl text-sm leading-7 text-slate-400 sm:text-base">
+                  Extract, clean, dedupe, copy, and download.
                 </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:w-[430px]">
-                <StatCard label="الصيغ" value="7" />
-                <StatCard label="الحد" value="10–15" />
-                <StatCard label="المعاينة" value="20" />
-                <StatCard label="الناتج" value="TXT / ZIP" />
+                <StatCard label="Formats" value="7" />
+                <StatCard label="Length" value="10–15" />
+                <StatCard label="Preview" value="20" />
+                <StatCard label="Export" value="TXT / ZIP" />
               </div>
             </div>
           </div>
@@ -262,7 +292,7 @@ export default function MedoFilterApp() {
               }}
               onDragLeave={() => setDragActive(false)}
               onDrop={onDrop}
-              className={`glass relative overflow-hidden rounded-[1.75rem] p-5 transition duration-200 sm:p-6 ${
+              className={`glass relative overflow-hidden rounded-[1.75rem] p-5 transition duration-300 ease-smooth sm:p-6 ${
                 dragActive ? "border-violet-400/50 shadow-accent" : ""
               }`}
             >
@@ -273,8 +303,9 @@ export default function MedoFilterApp() {
                   <div className="rounded-2xl bg-white/6 p-3">
                     <FileSpreadsheet className="h-5 w-5 text-violet-300" />
                   </div>
+
                   <div>
-                    <div className="text-lg font-semibold text-white">ارفع الملف</div>
+                    <div className="text-lg font-semibold text-white">Upload file</div>
                     <div className="text-sm text-slate-400">
                       Excel, CSV, TXT, JSON, HTML, XML
                     </div>
@@ -282,7 +313,7 @@ export default function MedoFilterApp() {
                 </div>
 
                 <div
-                  className={`rounded-[1.5rem] border border-dashed px-4 py-8 text-center transition duration-200 sm:px-6 sm:py-10 ${
+                  className={`rounded-[1.5rem] border border-dashed px-4 py-8 text-center transition duration-300 ease-smooth sm:px-6 sm:py-10 ${
                     dragActive
                       ? "border-violet-300/70 bg-violet-400/10"
                       : "border-white/10 bg-white/[0.025]"
@@ -292,7 +323,7 @@ export default function MedoFilterApp() {
                     <UploadCloud className="h-8 w-8 text-cyan-300" />
                   </div>
 
-                  <div className="text-lg font-medium text-white">اسحب الملف هنا أو اختره</div>
+                  <div className="text-lg font-medium text-white">Drop or choose a file</div>
                   <div className="mt-2 text-sm text-slate-400">
                     xlsx / csv / txt / log / json / html / xml
                   </div>
@@ -301,13 +332,13 @@ export default function MedoFilterApp() {
                     <button
                       type="button"
                       onClick={() => inputRef.current?.click()}
-                      className="rounded-2xl bg-gradient-to-l from-violet-500 to-cyan-500 px-5 py-3 font-medium text-white transition hover:scale-[1.01] active:scale-[0.99]"
+                      className="rounded-2xl bg-gradient-to-l from-violet-500 to-cyan-500 px-5 py-3 font-medium text-white transition duration-200 hover:scale-[1.01] active:scale-[0.99]"
                     >
-                      اختيار ملف
+                      Choose file
                     </button>
 
-                    <label className="flex cursor-pointer items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm text-slate-200 transition hover:bg-white/8">
-                      <span>إضافة +</span>
+                    <label className="flex cursor-pointer items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm text-slate-200 transition duration-200 hover:bg-white/8">
+                      <span>Add +</span>
                       <button
                         type="button"
                         onClick={() => setAddPlus((prev) => !prev)}
@@ -342,69 +373,66 @@ export default function MedoFilterApp() {
 
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
               <StatCard
-                label="الملف"
+                label="File"
                 value={result?.fileName ?? "—"}
-                hint={result ? "تمت القراءة" : "بانتظار الملف"}
+                hint={result ? "Ready" : "Waiting"}
               />
-              <StatCard label="قبل الحذف" value={result?.originalCount ?? 0} />
-              <StatCard label="بعد الحذف" value={result?.cleanedCount ?? 0} />
-              <StatCard label="الـ Ranges" value={result?.rangesCount ?? 0} />
-              <StatCard label="الدول" value={result?.countriesCount ?? 0} />
+              <StatCard label="Before" value={result?.originalCount ?? 0} />
+              <StatCard label="After" value={result?.cleanedCount ?? 0} />
+              <StatCard label="Ranges" value={result?.rangesCount ?? 0} />
+              <StatCard label="Countries" value={result?.countriesCount ?? 0} />
               <StatCard
-                label="المعروض"
+                label="Visible"
                 value={result ? `${previewNumbers.length}/${displayNumbers.length}` : "0/0"}
               />
             </div>
 
             <div className="glass rounded-[1.75rem] p-5 sm:p-6">
-              <SectionTitle title="الأدوات" subtitle="النسخ والتحميل يشملان كل الأرقام." />
+              <SectionTitle title="Actions" subtitle="Copy or export all numbers." />
 
               <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  disabled={!result?.numbers.length || loading}
+                <ActionButton
                   onClick={onCopy}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"
+                  disabled={!result?.numbers.length || loading}
+                  variant="secondary"
                 >
                   <Clipboard className="h-4 w-4" />
-                  {copyDone ? "تم النسخ" : "نسخ"}
-                </button>
+                  {copyDone ? "Copied" : "Copy"}
+                </ActionButton>
 
-                <button
-                  type="button"
-                  disabled={!result?.numbers.length || loading}
+                <ActionButton
                   onClick={onDownloadAll}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-l from-violet-500 to-fuchsia-500 px-4 py-3 text-sm font-medium text-white transition hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
+                  disabled={!result?.numbers.length || loading}
+                  variant="primary"
                 >
                   <Download className="h-4 w-4" />
                   TXT
-                </button>
+                </ActionButton>
 
-                <button
-                  type="button"
-                  disabled={!result || result.rangesCount === 0 || loading}
+                <ActionButton
                   onClick={onDownloadRanges}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-45"
+                  disabled={!result || result.rangesCount === 0 || loading}
+                  variant="cyan"
                 >
                   <FileArchive className="h-4 w-4" />
                   ZIP
-                </button>
+                </ActionButton>
               </div>
             </div>
 
             <div className="glass rounded-[1.75rem] p-5 sm:p-6">
               <SectionTitle
-                title="الـ Ranges"
-                subtitle="ملخص سريع"
+                title="Ranges"
+                subtitle="Quick summary"
                 right={loading ? <LoaderCircle className="h-5 w-5 animate-spin text-cyan-300" /> : null}
               />
 
-              <div className="max-h-[290px] space-y-3 overflow-auto scrollbar-thin pr-1">
+              <div className="max-h-[320px] space-y-3 overflow-auto scrollbar-thin pr-1">
                 {result?.rangeSummary.length ? (
                   result.rangeSummary.map((item) => (
                     <div
                       key={item.range}
-                      className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3"
+                      className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 transition duration-200 hover:bg-white/[0.045]"
                     >
                       <div className="truncate text-sm text-slate-200">{item.range}</div>
                       <div className="rounded-full bg-violet-500/15 px-3 py-1 text-xs text-violet-200">
@@ -414,7 +442,7 @@ export default function MedoFilterApp() {
                   ))
                 ) : (
                   <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-8 text-center text-sm text-slate-400">
-                    لا توجد بيانات.
+                    No data
                   </div>
                 )}
               </div>
@@ -424,8 +452,8 @@ export default function MedoFilterApp() {
           <section className="space-y-6">
             <div className="glass rounded-[1.75rem] p-5 sm:p-6">
               <SectionTitle
-                title="المعاينة"
-                subtitle="أول 20 رقم فقط"
+                title="Preview"
+                subtitle="First 20 numbers"
                 right={
                   <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
                     <Eye className="h-4 w-4" />
@@ -436,16 +464,20 @@ export default function MedoFilterApp() {
 
               {result && hiddenCount > 0 ? (
                 <div className="mb-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100">
-                  المعروض {previewNumbers.length} فقط، والباقي موجود في النسخ والتحميل.
+                  Showing {previewNumbers.length}. The rest is included in copy and download.
                 </div>
               ) : null}
 
-              <div className="max-h-[640px] overflow-auto rounded-[1.25rem] border border-white/8 bg-[#050812] scrollbar-thin">
-                <pre className="m-0 whitespace-pre-wrap break-all p-4 text-sm leading-7 text-slate-200">
-                  {previewNumbers.length
-                    ? previewNumbers.join("\n")
-                    : "لا يوجد ناتج بعد."}
-                </pre>
+              <div className="overflow-hidden rounded-[1.35rem] border border-white/8 bg-[#050812]">
+                <div className="border-b border-white/6 px-4 py-3 text-xs uppercase tracking-[0.18em] text-slate-500">
+                  Output
+                </div>
+
+                <div className="max-h-[680px] overflow-auto scrollbar-thin">
+                  <pre className="m-0 whitespace-pre-wrap break-all p-4 text-sm leading-7 text-slate-200">
+                    {previewNumbers.length ? previewNumbers.join("\n") : "No output yet."}
+                  </pre>
+                </div>
               </div>
             </div>
           </section>
