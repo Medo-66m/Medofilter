@@ -254,7 +254,7 @@ export default function MedoFilterApp() {
       await downloadRangesZip(result.groupedByRange, addPlus);
       setStatus({
         tone: "success",
-        message: "تم تنزيل ZIP."
+        message: "تم تنزيل ملف ranges."
       });
     } catch (error) {
       setStatus({
@@ -271,7 +271,7 @@ export default function MedoFilterApp() {
     if (numbers.length === 0) {
       setStatus({
         tone: "error",
-        message: "هذا الـ Range لا يحتوي على أرقام قابلة للتنزيل."
+        message: "هذا الـ range لا يحتوي على أرقام."
       });
       return;
     }
@@ -285,7 +285,7 @@ export default function MedoFilterApp() {
     } catch {
       setStatus({
         tone: "error",
-        message: "فشل تنزيل ملف الـ Range."
+        message: "فشل تنزيل هذا الـ range."
       });
     }
   }
@@ -440,7 +440,7 @@ export default function MedoFilterApp() {
                   variant="primary"
                 >
                   <Download className="h-4 w-4" />
-                  TXT
+                  Download all
                 </ActionButton>
 
                 <ActionButton
@@ -449,7 +449,7 @@ export default function MedoFilterApp() {
                   variant="cyan"
                 >
                   <FileArchive className="h-4 w-4" />
-                  ZIP
+                  Download ranges
                 </ActionButton>
               </div>
             </div>
@@ -482,10 +482,10 @@ export default function MedoFilterApp() {
                           <button
                             type="button"
                             onClick={() => void onDownloadSingleRange(item.range)}
-                            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white transition duration-200 hover:bg-white/10"
+                            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white transition duration-200 hover:bg-white/10"
                           >
                             <Download className="h-3.5 w-3.5" />
-                            TXT
+                            Download
                           </button>
                         </div>
                       </div>
