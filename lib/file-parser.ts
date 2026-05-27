@@ -53,40 +53,9 @@ function isRowEmpty(row: unknown[]): boolean {
   return !row.some((cell) => sanitizeCell(cell) !== "");
 }
 
-function getCellDisplayValue(sheet: XLSX.WorkSheet, address: string): string {
-  const cell = sheet[address];
-  if (!cell) return "";
-
-  if (cell.w !== undefined && cell.w !== null) {
-    return sanitizeCell(cell.w);
-  }
-
-  if (cell.v !== undefined && cell.v !== null) {
-    return sanitizeCell(cell.v);
-  }
-
-  return "";
-}
-
-function sheetToMatrix(sheet: XLSX.WorkSheet): string[][] {
-  const ref = sheet["!ref"];
-  if (!ref) return [];
-
-  const range = XLSX.utils.decode_range(ref);
-  const rows: string[][] = [];
-
-  for (let rowIndex = range.s.r; rowIndex <= range.e.r; rowIndex += 1) {
-    const row: string[] = [];
-
-    for (let colIndex = range.s.c; colIndex <= range.e.c; colIndex += 1) {
-      const address = XLSX.utils.encode_cell({ r: rowIndex, c: colIndex });
-      row.push(getCellDisplayValue(sheet, address));
-    }
-
-    rows.push(row);
-  }
-
-  return rows;
+function normalizeMatrixCell(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  return sanitizeCell(value);
 }
 
 function findBestHeaderKey(keys: string[], kind: "phone" | "range" | "country"): string | null {
@@ -294,8 +263,11 @@ export function parseStructuredRows(
     if (phoneKey) {
       const rawPhoneCell = row[phoneKey];
       const candidates = extractFromPhoneCell(rawPhoneCell);
-      pushEntries(entries, candidates, rangeValue, countryValue, sheetName, phoneKey);
-      continue;
+
+      if (candidates.length > 0) {
+        pushEntries(entries, candidates, rangeValue, countryValue, sheetName, phoneKey);
+        continue;
+      }
     }
 
     for (const [key, value] of Object.entries(row)) {
@@ -360,7 +332,13 @@ function buildResult(fileName: string, entries: ExtractedEntry[], sheets: string
 }
 
 function parseWorkbookSheet(sheet: XLSX.WorkSheet, sheetName: string): ExtractedEntry[] {
-  const matrix = sheetToMatrix(sheet);
+  const matrix = XLSX.utils.sheet_to_json<(string | number | boolean | null)[]>(sheet, {
+    header: 1,
+    raw: false,
+    defval: "",
+    blankrows: false
+  }).map((row) => row.map((cell) => normalizeMatrixCell(cell)));
+
   const normalizedRows = normalizeRowToObjects(matrix);
   return parseStructuredRows(normalizedRows, sheetName);
 }
@@ -368,9 +346,9 @@ function parseWorkbookSheet(sheet: XLSX.WorkSheet, sheetName: string): Extracted
 function parseWorkbookFromArrayBuffer(fileName: string, buffer: ArrayBuffer): ParsedResult {
   const workbook = XLSX.read(buffer, {
     type: "array",
-    cellDates: false,
-    raw: true,
-    dense: false
+    raw: false,
+    cellText: true,
+    cellDates: false
   });
 
   const entries: ExtractedEntry[] = [];
@@ -386,8 +364,8 @@ function parseWorkbookFromArrayBuffer(fileName: string, buffer: ArrayBuffer): Pa
 function parseWorkbookFromText(fileName: string, text: string): ParsedResult {
   const workbook = XLSX.read(text, {
     type: "string",
-    raw: true,
-    dense: false
+    raw: false,
+    cellText: true
   });
 
   const entries: ExtractedEntry[] = [];
