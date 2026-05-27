@@ -36,6 +36,8 @@ const PHONE_HEADER_EXACT = [
 const RANGE_HEADER_EXACT = ["range", "prefix", "series", "batch"];
 const COUNTRY_HEADER_EXACT = ["country", "country name", "nation"];
 
+const HEADER_SCAN_LIMIT = 100;
+
 function getExtension(fileName: string): string {
   return fileName.toLowerCase().split(".").pop() ?? "";
 }
@@ -44,8 +46,19 @@ function isSupported(fileName: string): boolean {
   return SUPPORTED_EXTENSIONS.has(getExtension(fileName));
 }
 
+function sanitizeCell(raw: unknown): string {
+  return normalizeDigits(String(raw ?? "")).trim();
+}
+
+function isRowEmpty(row: unknown[]): boolean {
+  return !row.some((cell) => sanitizeCell(cell) !== "");
+}
+
 function findBestHeaderKey(keys: string[], kind: "phone" | "range" | "country"): string | null {
-  const normalizedKeys = keys.map((key) => ({ original: key, normalized: normalizeHeader(key) }));
+  const normalizedKeys = keys.map((key) => ({
+    original: key,
+    normalized: normalizeHeader(key)
+  }));
 
   if (kind === "phone") {
     const exactNumber = normalizedKeys.find((item) => item.normalized === "number");
@@ -83,8 +96,116 @@ function findBestHeaderKey(keys: string[], kind: "phone" | "range" | "country"):
   return null;
 }
 
-function sanitizeCell(raw: unknown): string {
-  return normalizeDigits(String(raw ?? "")).trim();
+function scoreHeaderRow(row: unknown[]): number {
+  const normalizedCells = row.map((cell) => normalizeHeader(String(cell ?? ""))).filter(Boolean);
+  if (normalizedCells.length === 0) return 0;
+
+  let score = 0;
+
+  for (const cell of normalizedCells) {
+    if (cell === "number") score += 15;
+    if (PHONE_HEADER_EXACT.includes(cell)) score += 10;
+    if (RANGE_HEADER_EXACT.includes(cell)) score += 6;
+    if (COUNTRY_HEADER_EXACT.includes(cell)) score += 6;
+    if (/(phone|mobile|telephone|tel|cell|whatsapp|msisdn|contact)/.test(cell)) score += 8;
+    if (/(range|prefix|series|batch)/.test(cell)) score += 4;
+    if (/(country|nation)/.test(cell)) score += 4;
+  }
+
+  if (
+    normalizedCells.includes("number") &&
+    (normalizedCells.includes("range") || normalizedCells.includes("prefix"))
+  ) {
+    score += 10;
+  }
+
+  return score;
+}
+
+function detectHeaderRowIndex(rows: unknown[][]): number {
+  const limit = Math.min(rows.length, HEADER_SCAN_LIMIT);
+  let bestIndex = -1;
+  let bestScore = 0;
+
+  for (let index = 0; index < limit; index += 1) {
+    const row = rows[index] ?? [];
+    const score = scoreHeaderRow(row);
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = index;
+    }
+  }
+
+  return bestScore > 0 ? bestIndex : -1;
+}
+
+function normalizeRowToObjects(rows: unknown[][]): Record<string, unknown>[] {
+  if (rows.length === 0) return [];
+
+  const headerIndex = detectHeaderRowIndex(rows);
+
+  if (headerIndex === -1) {
+    return rows
+      .filter((row) => !isRowEmpty(row))
+      .map((row, rowIndex) => {
+        const record: Record<string, unknown> = {};
+        row.forEach((value, columnIndex) => {
+          record[`column_${rowIndex}_${columnIndex}`] = value;
+        });
+        return record;
+      });
+  }
+
+  const headerRow = rows[headerIndex] ?? [];
+  const headers = headerRow.map((cell, index) => {
+    const value = sanitizeCell(cell);
+    return value || `column_${index + 1}`;
+  });
+
+  return rows
+    .slice(headerIndex + 1)
+    .filter((row) => !isRowEmpty(row))
+    .map((row) => {
+      const record: Record<string, unknown> = {};
+      headers.forEach((header, index) => {
+        record[header] = row[index] ?? "";
+      });
+      return record;
+    });
+}
+
+function splitCountryFromRange(rangeValue: string | null): {
+  country: string | null;
+  range: string | null;
+} {
+  if (!rangeValue) {
+    return {
+      country: null,
+      range: null
+    };
+  }
+
+  const normalized = sanitizeCell(rangeValue).replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return {
+      country: null,
+      range: null
+    };
+  }
+
+  const match = normalized.match(/^(.+?)\s+(\d{2,})$/);
+  if (!match) {
+    return {
+      country: null,
+      range: normalized
+    };
+  }
+
+  return {
+    country: match[1]?.trim() || null,
+    range: `${match[1]?.trim() || ""} ${match[2]}`.trim()
+  };
 }
 
 function pushEntries(
@@ -106,70 +227,6 @@ function pushEntries(
   }
 }
 
-function scoreHeaderRow(row: unknown[]): number {
-  const normalizedCells = row.map((cell) => normalizeHeader(String(cell ?? ""))).filter(Boolean);
-  if (normalizedCells.length === 0) return 0;
-
-  let score = 0;
-
-  for (const cell of normalizedCells) {
-    if (cell === "number") score += 10;
-    if (PHONE_HEADER_EXACT.includes(cell)) score += 8;
-    if (RANGE_HEADER_EXACT.includes(cell)) score += 4;
-    if (COUNTRY_HEADER_EXACT.includes(cell)) score += 4;
-    if (/(phone|mobile|telephone|tel|cell|whatsapp|msisdn|contact)/.test(cell)) score += 6;
-    if (/(range|prefix|series|batch)/.test(cell)) score += 3;
-    if (/(country|nation)/.test(cell)) score += 3;
-  }
-
-  return score;
-}
-
-function normalizeRowToObjects(rows: unknown[][]): Record<string, unknown>[] {
-  if (rows.length === 0) return [];
-
-  let bestHeaderIndex = -1;
-  let bestScore = 0;
-
-  for (let index = 0; index < Math.min(rows.length, 25); index += 1) {
-    const score = scoreHeaderRow(rows[index] ?? []);
-    if (score > bestScore) {
-      bestScore = score;
-      bestHeaderIndex = index;
-    }
-  }
-
-  if (bestHeaderIndex === -1 || bestScore === 0) {
-    return rows
-      .filter((row) => row.some((cell) => String(cell ?? "").trim() !== ""))
-      .map((row, rowIndex) => {
-        const record: Record<string, unknown> = {};
-        row.forEach((value, columnIndex) => {
-          record[`column_${rowIndex}_${columnIndex}`] = value;
-        });
-        return record;
-      });
-  }
-
-  const headerRow = rows[bestHeaderIndex] ?? [];
-  const headers = headerRow.map((cell, index) => {
-    const value = sanitizeCell(cell);
-    return value || `column_${index + 1}`;
-  });
-
-  const dataRows = rows.slice(bestHeaderIndex + 1);
-
-  return dataRows
-    .filter((row) => row.some((cell) => String(cell ?? "").trim() !== ""))
-    .map((row) => {
-      const record: Record<string, unknown> = {};
-      headers.forEach((header, index) => {
-        record[header] = row[index] ?? "";
-      });
-      return record;
-    });
-}
-
 export function parseStructuredRows(
   rows: Record<string, unknown>[],
   sheetName: string | null = null
@@ -189,8 +246,13 @@ export function parseStructuredRows(
   const entries: ExtractedEntry[] = [];
 
   for (const row of rows) {
-    const rangeValue = rangeKey ? sanitizeCell(row[rangeKey]) || null : null;
-    const countryValue = countryKey ? sanitizeCell(row[countryKey]) || null : null;
+    const rawRangeValue = rangeKey ? sanitizeCell(row[rangeKey]) || null : null;
+    const rawCountryValue = countryKey ? sanitizeCell(row[countryKey]) || null : null;
+
+    const inferredFromRange = !rawCountryValue ? splitCountryFromRange(rawRangeValue) : null;
+
+    const rangeValue = inferredFromRange?.range ?? rawRangeValue;
+    const countryValue = rawCountryValue ?? inferredFromRange?.country ?? null;
 
     if (phoneKey) {
       const rawPhoneCell = row[phoneKey];
