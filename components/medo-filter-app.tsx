@@ -10,6 +10,7 @@ import {
   FileSpreadsheet,
   LoaderCircle,
   MoonStar,
+  RotateCcw,
   Sparkles,
   UploadCloud,
   XCircle
@@ -101,14 +102,16 @@ function ActionButton({
   onClick: () => void | Promise<void>;
   disabled: boolean;
   children: React.ReactNode;
-  variant?: "primary" | "secondary" | "cyan";
+  variant?: "primary" | "secondary" | "cyan" | "danger";
 }) {
   const styles =
     variant === "primary"
       ? "bg-gradient-to-l from-violet-500 to-fuchsia-500 text-white hover:scale-[1.01] active:scale-[0.99]"
       : variant === "cyan"
         ? "border border-cyan-400/20 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/15"
-        : "border border-white/10 bg-white/5 text-white hover:bg-white/10";
+        : variant === "danger"
+          ? "border border-red-500/20 bg-red-500/10 text-red-200 hover:bg-red-500/15"
+          : "border border-white/10 bg-white/5 text-white hover:bg-white/10";
 
   return (
     <button
@@ -136,18 +139,102 @@ function downloadSingleRangeTxt(range: string, lines: string[], addPlus: boolean
   URL.revokeObjectURL(url);
 }
 
+function dedupePreserveOrder(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const value of values) {
+    if (seen.has(value)) continue;
+    seen.add(value);
+    result.push(value);
+  }
+
+  return result;
+}
+
+function mergeParsedResults(results: ParsedResult[], fileNames: string[]): ParsedResult {
+  const outputLines = dedupePreserveOrder(results.flatMap((item) => item.outputLines));
+  const numbers = dedupePreserveOrder(
+    outputLines.map((line) => line.split("|")[0] ?? line)
+  );
+
+  const groupedMap = new Map<string, string[]>();
+  const countriesSet = new Set<string>();
+  const sheetsSet = new Set<string>();
+  let originalCount = 0;
+
+  for (const result of results) {
+    originalCount += result.originalCount;
+
+    for (const country of result.countries) {
+      countriesSet.add(country);
+    }
+
+    for (const sheet of result.sheets) {
+      sheetsSet.add(sheet);
+    }
+
+    for (const [groupName, lines] of Object.entries(result.groupedByRange)) {
+      const current = groupedMap.get(groupName) ?? [];
+      groupedMap.set(groupName, dedupePreserveOrder([...current, ...lines]));
+    }
+  }
+
+  const groupedByRange: Record<string, string[]> = {};
+  const rangeSummary = [...groupedMap.entries()]
+    .map(([range, lines]) => {
+      groupedByRange[range] = lines;
+      return {
+        range,
+        count: lines.length
+      };
+    })
+    .sort((a, b) => b.count - a.count || a.range.localeCompare(b.range));
+
+  const outputMode = results.some((item) => item.outputMode === "accounts")
+    ? "accounts"
+    : results.some((item) => item.outputMode === "pairs")
+      ? "pairs"
+      : "numbers";
+
+  const summaryLabel =
+    outputMode === "accounts"
+      ? "Groups"
+      : results.find((item) => item.summaryLabel === "Groups")?.summaryLabel ?? "Ranges";
+
+  return {
+    fileName:
+      fileNames.length === 1
+        ? fileNames[0] ?? "—"
+        : `${fileNames.length} files`,
+    originalCount,
+    cleanedCount: outputLines.length,
+    rangesCount: rangeSummary.length,
+    countriesCount: countriesSet.size,
+    rangeSummary,
+    numbers,
+    outputLines,
+    groupedByRange,
+    countries: [...countriesSet],
+    sheets: [...sheetsSet],
+    outputMode,
+    summaryLabel
+  };
+}
+
 export default function MedoFilterApp() {
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const [result, setResult] = useState<ParsedResult | null>(null);
   const [status, setStatus] = useState<StatusState>({
     tone: "idle",
-    message: "ارفع الملف وابدأ."
+    message: "ارفع ملفًا أو أكثر وابدأ."
   });
   const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [addPlus, setAddPlus] = useState(false);
   const [copyDone, setCopyDone] = useState(false);
+  const [uploadedFileNames, setUploadedFileNames] = useState<string[]>([]);
 
   const displayLines = useMemo(() => {
     if (!result) return [];
@@ -157,35 +244,62 @@ export default function MedoFilterApp() {
   const previewLines = useMemo(() => displayLines.slice(0, PREVIEW_LIMIT), [displayLines]);
   const hiddenCount = Math.max(displayLines.length - previewLines.length, 0);
 
-  async function handleSelectedFile(file: File) {
+  function onReset() {
+    setResult(null);
+    setUploadedFileNames([]);
+    setCopyDone(false);
+    setDragActive(false);
+    setLoading(false);
+    setStatus({
+      tone: "idle",
+      message: "ارفع ملفًا أو أكثر وابدأ."
+    });
+
+    if (inputRef.current) {
+      inputRef.current.value = "";
+    }
+  }
+
+  async function handleSelectedFiles(files: FileList | File[]) {
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
+
     setLoading(true);
     setCopyDone(false);
+    setUploadedFileNames(fileArray.map((file) => file.name));
 
     setStatus({
       tone: "info",
-      message: `جاري تحليل ${file.name}...`
+      message:
+        fileArray.length === 1
+          ? `جاري تحليل ${fileArray[0]?.name ?? "file"}...`
+          : `جاري تحليل ${fileArray.length} ملفات...`
     });
 
     try {
-      const parsed = validateParsedResult(await parseFile(file));
-      setResult(parsed);
+      const parsedList = await Promise.all(
+        fileArray.map(async (file) => validateParsedResult(await parseFile(file)))
+      );
 
-      if (parsed.cleanedCount === 0) {
+      const merged = mergeParsedResults(parsedList, fileArray.map((file) => file.name));
+      setResult(merged);
+
+      if (merged.cleanedCount === 0) {
         setStatus({
           tone: "error",
-          message: "لم أجد بيانات صالحة داخل الملف."
+          message: "لم أجد بيانات صالحة داخل الملفات."
         });
       } else {
         setStatus({
           tone: "success",
           message:
-            parsed.cleanedCount > PREVIEW_LIMIT
-              ? `تم العثور على ${parsed.cleanedCount} سطرًا. المعروض أول ${PREVIEW_LIMIT} فقط.`
-              : `تم العثور على ${parsed.cleanedCount} سطرًا.`
+            merged.cleanedCount > PREVIEW_LIMIT
+              ? `تم العثور على ${merged.cleanedCount} سطرًا من ${fileArray.length} ملف. المعروض أول ${PREVIEW_LIMIT} فقط.`
+              : `تم العثور على ${merged.cleanedCount} سطرًا من ${fileArray.length} ملف.`
         });
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "حدث خطأ أثناء قراءة الملف.";
+      const message = error instanceof Error ? error.message : "حدث خطأ أثناء قراءة الملفات.";
       setResult(null);
       setStatus({
         tone: "error",
@@ -197,18 +311,18 @@ export default function MedoFilterApp() {
   }
 
   async function onFileInputChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    await handleSelectedFile(file);
+    const files = event.target.files;
+    if (!files?.length) return;
+    await handleSelectedFiles(files);
     event.target.value = "";
   }
 
   async function onDrop(event: React.DragEvent<HTMLDivElement>) {
     event.preventDefault();
     setDragActive(false);
-    const file = event.dataTransfer.files?.[0];
-    if (!file) return;
-    await handleSelectedFile(file);
+    const files = event.dataTransfer.files;
+    if (!files?.length) return;
+    await handleSelectedFiles(files);
   }
 
   async function onCopy() {
@@ -254,7 +368,7 @@ export default function MedoFilterApp() {
       await downloadRangesZip(result.groupedByRange, addPlus);
       setStatus({
         tone: "success",
-        message: result.outputMode === "accounts" ? "تم تنزيل المجموعات." : "تم تنزيل ملف ranges."
+        message: result.outputMode === "accounts" ? "تم تنزيل المجموعات." : "تم تنزيل الملف."
       });
     } catch (error) {
       setStatus({
@@ -361,9 +475,9 @@ export default function MedoFilterApp() {
                   </div>
 
                   <div>
-                    <div className="text-lg font-semibold text-white">Upload file</div>
+                    <div className="text-lg font-semibold text-white">Upload files</div>
                     <div className="text-sm text-slate-400">
-                      Excel, CSV, TXT, JSON, HTML, XML
+                      File واحد أو أكثر في نفس الوقت
                     </div>
                   </div>
                 </div>
@@ -379,7 +493,7 @@ export default function MedoFilterApp() {
                     <UploadCloud className="h-8 w-8 text-cyan-300" />
                   </div>
 
-                  <div className="text-lg font-medium text-white">Drop or choose a file</div>
+                  <div className="text-lg font-medium text-white">Drop files or choose files</div>
                   <div className="mt-2 text-sm text-slate-400">
                     xlsx / csv / txt / log / json / html / xml
                   </div>
@@ -390,7 +504,7 @@ export default function MedoFilterApp() {
                       onClick={() => inputRef.current?.click()}
                       className="rounded-2xl bg-gradient-to-l from-violet-500 to-cyan-500 px-5 py-3 font-medium text-white transition duration-200 hover:scale-[1.01] active:scale-[0.99]"
                     >
-                      Choose file
+                      Choose files
                     </button>
 
                     <label className="flex cursor-pointer items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm text-slate-200 transition duration-200 hover:bg-white/8">
@@ -410,16 +524,44 @@ export default function MedoFilterApp() {
                         />
                       </button>
                     </label>
+
+                    <button
+                      type="button"
+                      onClick={onReset}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 px-5 py-3 text-sm text-red-200 transition duration-200 hover:bg-red-500/15"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Start over
+                    </button>
                   </div>
 
                   <input
                     ref={inputRef}
                     type="file"
                     accept={ACCEPTED_FILES}
+                    multiple
                     className="hidden"
                     onChange={onFileInputChange}
                   />
                 </div>
+
+                {uploadedFileNames.length > 0 ? (
+                  <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">
+                      Files
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {uploadedFileNames.map((name) => (
+                        <span
+                          key={name}
+                          className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300"
+                        >
+                          {name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="mt-4">
                   <StatusBanner status={status} />
@@ -428,7 +570,7 @@ export default function MedoFilterApp() {
             </div>
 
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-              <StatCard label="File" value={result?.fileName ?? "—"} />
+              <StatCard label="Files" value={uploadedFileNames.length || 0} />
               <StatCard label="Before" value={result?.originalCount ?? 0} />
               <StatCard label="After" value={result?.cleanedCount ?? 0} />
               <StatCard label={summaryTitle} value={result?.rangesCount ?? 0} />
@@ -469,6 +611,15 @@ export default function MedoFilterApp() {
                   <FileArchive className="h-4 w-4" />
                   {result?.outputMode === "accounts" ? "Download groups" : "Download ranges"}
                 </ActionButton>
+
+                <ActionButton
+                  onClick={onReset}
+                  disabled={loading}
+                  variant="danger"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Reset
+                </ActionButton>
               </div>
             </div>
 
@@ -490,7 +641,7 @@ export default function MedoFilterApp() {
                         <div className="min-w-0">
                           <div className="truncate text-sm font-medium text-slate-200">{item.range}</div>
                           <div className="mt-1 text-xs text-slate-500">
-                            {item.count} {result.outputMode === "accounts" ? "accounts" : "lines"}
+                            {item.count} {result?.outputMode === "accounts" ? "accounts" : "lines"}
                           </div>
                         </div>
 
