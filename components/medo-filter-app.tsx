@@ -5,11 +5,11 @@ import {
   CheckCircle2,
   Clipboard,
   Download,
+  Eye,
   FileArchive,
   FileSpreadsheet,
   LoaderCircle,
   MoonStar,
-  ShieldCheck,
   Sparkles,
   UploadCloud,
   XCircle
@@ -25,6 +25,7 @@ type StatusState = {
 };
 
 const ACCEPTED_FILES = ".xlsx,.csv,.txt,.log,.json,.html,.xml";
+const PREVIEW_LIMIT = 20;
 
 function StatusBanner({ status }: { status: StatusState }) {
   const styles =
@@ -71,27 +72,13 @@ function StatCard({
   );
 }
 
-function FeaturePill({
-  icon: Icon,
-  text
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  text: string;
-}) {
-  return (
-    <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
-      <Icon className="h-4 w-4 text-violet-300" />
-      {text}
-    </div>
-  );
-}
-
 export default function MedoFilterApp() {
   const inputRef = useRef<HTMLInputElement | null>(null);
+
   const [result, setResult] = useState<ParsedResult | null>(null);
   const [status, setStatus] = useState<StatusState>({
     tone: "idle",
-    message: "ارفع ملفك، وأنا أطلع لك الأرقام المرتبة والنظيفة مباشرة."
+    message: "ارفع الملف، وسأعالج كل الأرقام كاملة وأعرض لك أول 20 رقم فقط."
   });
   const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -102,6 +89,12 @@ export default function MedoFilterApp() {
     if (!result) return [];
     return result.numbers.map((value) => withOptionalPlus(value, addPlus));
   }, [result, addPlus]);
+
+  const previewNumbers = useMemo(() => {
+    return displayNumbers.slice(0, PREVIEW_LIMIT);
+  }, [displayNumbers]);
+
+  const hiddenCount = Math.max(displayNumbers.length - previewNumbers.length, 0);
 
   async function handleSelectedFile(file: File) {
     setLoading(true);
@@ -119,12 +112,17 @@ export default function MedoFilterApp() {
         setStatus({
           tone: "error",
           message:
-            "لم أجد أرقامًا صالحة بطول من 10 إلى 15 رقمًا داخل الملف. تأكد من البيانات أو جرب ملفًا آخر."
+            "لم أجد أرقامًا صالحة بطول من 10 إلى 15 رقمًا داخل الملف. تأكد من البيانات أو جرّب ملفًا آخر."
         });
       } else {
+        const previewHint =
+          parsed.cleanedCount > PREVIEW_LIMIT
+            ? `أعرض لك أول ${PREVIEW_LIMIT} رقم فقط داخل الصفحة، لكن النسخ والتحميل يشملان كل الأرقام بالكامل.`
+            : "تم التحليل بنجاح.";
+
         setStatus({
           tone: "success",
-          message: `تم التحليل بنجاح. وجدت ${parsed.originalCount} رقمًا قبل إزالة التكرار، والنتيجة النهائية ${parsed.cleanedCount} رقمًا.`
+          message: `تم التحليل بنجاح. وجدت ${parsed.originalCount} رقمًا قبل إزالة التكرار، والنتيجة النهائية ${parsed.cleanedCount} رقمًا. ${previewHint}`
         });
       }
     } catch (error) {
@@ -162,7 +160,7 @@ export default function MedoFilterApp() {
       setCopyDone(true);
       setStatus({
         tone: "success",
-        message: "تم نسخ كل الأرقام إلى الحافظة."
+        message: `تم نسخ ${displayNumbers.length} رقمًا كاملًا إلى الحافظة.`
       });
       window.setTimeout(() => setCopyDone(false), 1800);
     } catch {
@@ -173,14 +171,14 @@ export default function MedoFilterApp() {
     }
   }
 
-  function onDownloadAll() {
+  async function onDownloadAll() {
     if (!result?.numbers.length) return;
 
     try {
       downloadNumbersTxt(result.numbers, addPlus);
       setStatus({
         tone: "success",
-        message: "تم تجهيز ملف TXT وتنزيله بنجاح."
+        message: `تم تنزيل ملف TXT يحتوي على ${result.numbers.length} رقمًا كاملًا.`
       });
     } catch {
       setStatus({
@@ -211,45 +209,33 @@ export default function MedoFilterApp() {
     <main className="min-h-screen">
       <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
         <header className="mb-6">
-          <div className="glass overflow-hidden rounded-[1.85rem] bg-hero-grid p-5 sm:p-6 lg:p-8">
-            <div className="relative">
-              <div className="absolute -left-16 -top-16 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
-              <div className="absolute -right-10 top-0 h-48 w-48 rounded-full bg-violet-500/15 blur-3xl" />
-
-              <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-                <div className="max-w-3xl">
-                  <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
-                    <MoonStar className="h-4 w-4 text-violet-300" />
-                    Medo Filter
-                  </div>
-
-                  <h1 className="m-0 text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl">
-                    استخرج ونظّف أرقام الهاتف
-                    <span className="bg-gradient-to-l from-cyan-300 to-violet-300 bg-clip-text text-transparent">
-                      {" "}
-                      من ملفاتك بثقة
-                    </span>
-                  </h1>
-
-                  <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300 sm:text-base">
-                    ارفع الملف، وسيتم استخراج أرقام الهاتف فقط، تنظيفها، حذف التكرار، وتجهيزها
-                    للنسخ أو التحميل. لو الملف فيه أعمدة مثل Country / Range / Number فالأداة
-                    ستأخذ Number فقط بدون أي دمج خاطئ.
-                  </p>
-
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    <FeaturePill icon={ShieldCheck} text="معالجة محلية داخل المتصفح" />
-                    <FeaturePill icon={Sparkles} text="تنظيف ذكي بدون دمج خاطئ" />
-                    <FeaturePill icon={FileSpreadsheet} text="جاهز لـ Excel وCSV" />
-                  </div>
+          <div className="glass rounded-[1.75rem] bg-hero-grid p-5 sm:p-6 lg:p-8">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-3xl">
+                <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
+                  <MoonStar className="h-4 w-4 text-violet-300" />
+                  Medo Filter
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:w-[430px]">
-                  <StatCard label="الصيغ" value="7" hint="xlsx, csv, txt..." />
-                  <StatCard label="المدى المقبول" value="10–15" hint="أرقام فقط" />
-                  <StatCard label="الناتج" value="TXT / ZIP" hint="نسخ وتنزيل" />
-                  <StatCard label="الخصوصية" value="Local" hint="بدون رفع للسيرفر" />
-                </div>
+                <h1 className="m-0 text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl">
+                  فلترة قوية للأرقام
+                  <span className="bg-gradient-to-l from-cyan-300 to-violet-300 bg-clip-text text-transparent">
+                    {" "}
+                    بدون ما تثقل الصفحة
+                  </span>
+                </h1>
+
+                <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300 sm:text-base">
+                  ارفع الملف، وسيتم استخراج الأرقام وتنظيفها وحذف التكرار. الموقع يعالج كل
+                  الأرقام كاملة، لكنه يعرض أول 20 رقم فقط داخل الصفحة حتى يظل سريعًا ومريحًا.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:w-[460px]">
+                <StatCard label="الصيغ" value="7" hint="xlsx, csv, txt..." />
+                <StatCard label="المدى المقبول" value="10–15" hint="أرقام فقط" />
+                <StatCard label="الناتج" value="TXT / ZIP" hint="نسخ وتنزيل" />
+                <StatCard label="المعاينة" value="20" hint="فقط داخل الصفحة" />
               </div>
             </div>
           </div>
@@ -278,7 +264,7 @@ export default function MedoFilterApp() {
                   <div>
                     <div className="text-lg font-semibold">ارفع الملف أو اسحبه هنا</div>
                     <div className="text-sm text-slate-400">
-                      يدعم الكمبيوتر والموبايل. يبدأ التحليل تلقائيًا بعد الاختيار.
+                      التحليل يبدأ تلقائيًا، والتحميل والنسخ يشملان كل الأرقام كاملة.
                     </div>
                   </div>
                 </div>
@@ -369,9 +355,9 @@ export default function MedoFilterApp() {
                 hint="إن كانت موجودة"
               />
               <StatCard
-                label="عدد الـ Sheets"
-                value={result?.sheets.length ?? 0}
-                hint="في ملفات Excel/CSV"
+                label="المعروض"
+                value={result ? `${previewNumbers.length}/${displayNumbers.length}` : "0/0"}
+                hint="داخل الصفحة فقط"
               />
             </div>
 
@@ -380,7 +366,7 @@ export default function MedoFilterApp() {
                 <div>
                   <h2 className="m-0 text-xl font-semibold">الأوامر السريعة</h2>
                   <p className="mt-2 text-sm text-slate-400">
-                    كل شيء جاهز بمجرد انتهاء التحليل.
+                    النسخ والتحميل يعملان على كل الأرقام، وليس فقط المعروض.
                   </p>
                 </div>
 
@@ -417,9 +403,7 @@ export default function MedoFilterApp() {
                 </div>
               </div>
             </div>
-          </section>
 
-          <section className="space-y-6">
             <div className="glass rounded-[1.75rem] p-5 sm:p-6">
               <div className="mb-4 flex items-center justify-between gap-4">
                 <div>
@@ -451,24 +435,34 @@ export default function MedoFilterApp() {
                 )}
               </div>
             </div>
+          </section>
 
+          <section className="space-y-6">
             <div className="glass rounded-[1.75rem] p-5 sm:p-6">
               <div className="mb-4 flex items-center justify-between gap-4">
                 <div>
-                  <h2 className="m-0 text-xl font-semibold">الناتج النهائي</h2>
+                  <h2 className="m-0 text-xl font-semibold">معاينة أول 20 رقم</h2>
                   <p className="mt-2 text-sm text-slate-400">
-                    كل رقم في سطر. بدون رموز أو نصوص إضافية داخل الملف الناتج.
+                    هذه مجرد معاينة سريعة. الملف النهائي والنسخ يحتويان على كل الأرقام.
                   </p>
                 </div>
-                <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
-                  {displayNumbers.length} رقم
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
+                  <Eye className="h-4 w-4" />
+                  Preview
                 </div>
               </div>
 
-              <div className="max-h-[430px] overflow-auto rounded-[1.25rem] border border-white/8 bg-[#050812] scrollbar-thin">
+              {result && hiddenCount > 0 ? (
+                <div className="mb-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100">
+                  المعروض الآن أول {previewNumbers.length} رقم فقط، ويوجد {hiddenCount} رقم
+                  إضافي محفوظين بالكامل للنسخ والتحميل.
+                </div>
+              ) : null}
+
+              <div className="max-h-[520px] overflow-auto rounded-[1.25rem] border border-white/8 bg-[#050812] scrollbar-thin">
                 <pre className="m-0 whitespace-pre-wrap break-all p-4 text-sm leading-7 text-slate-200">
-                  {displayNumbers.length
-                    ? displayNumbers.join("\n")
+                  {previewNumbers.length
+                    ? previewNumbers.join("\n")
                     : "لا يوجد ناتج بعد. ارفع ملفًا للبدء."}
                 </pre>
               </div>
